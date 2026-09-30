@@ -1,0 +1,95 @@
+# Blueprint do Render do Kasiski Mandato: backend, cron da rotina diária e banco — isolados do Kasiski Licitações.
+services:
+  - type: web
+    name: mandato-api
+    runtime: python
+    rootDir: backend
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 300 --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/saude
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mandato-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: https://mandato.kasiski.com.br
+      - key: FRONTEND_URL
+        value: https://mandato.kasiski.com.br
+      - key: SITE_URL
+        value: https://kasiski.com.br
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PORTAL_TRANSPARENCIA_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_REMETENTE
+        value: Kasiski Mandato <nao-responda@kasiski.com.br>
+      - key: VERIFICAR_EMAIL
+        value: auto
+      - key: ELEICOES
+        value: 2026-10-04:geral,2028-10-01:municipal
+      - key: USD_BRL
+        value: "5.5"
+      - key: BACKEND_URL
+        sync: false                # URL pública deste serviço (webhook do Mercado Pago)
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_WEBHOOK_SECRET
+        sync: false
+      - key: DOMINIOS_OFICIAIS
+        value: .leg.br,.gov.br
+      - key: DOE_SP_API_URL
+        sync: false
+      - key: DOE_SP_TOKEN
+        sync: false
+
+  - type: cron
+    name: mandato-rotina
+    runtime: python
+    rootDir: backend
+    plan: starter
+    schedule: "30 9 * * *"          # 06h30 de Brasília (UTC-3)
+    buildCommand: pip install -r requirements.txt
+    startCommand: python jobs/rotina_diaria.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mandato-db
+          property: connectionString
+      - key: SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PORTAL_TRANSPARENCIA_KEY
+        sync: false
+      - key: DOE_SP_API_URL
+        sync: false
+      - key: DOE_SP_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://mandato.kasiski.com.br
+
+databases:
+  - name: mandato-db
+    plan: basic-256mb
