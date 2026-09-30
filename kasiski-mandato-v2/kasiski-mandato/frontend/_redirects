@@ -1,0 +1,4 @@
+# mandato.kasiski.com.br (Netlify). App de página única: tudo cai no index.html.
+/entrar     /#/entrar     302
+/cadastro   /#/cadastro   302
+/*          /index.html   200
