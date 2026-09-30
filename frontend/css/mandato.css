@@ -1,0 +1,75 @@
+/* Kasiski Mandato — complementos ao app.css do Kasiski (mesmo Manual da Marca v1.0: azul profundo, ciano só como
+   destaque, Inter). Só componentes novos; nada aqui redefine tokens de marca. */
+
+.link-item { text-decoration: none; color: inherit; }
+.link-item:hover b { color: var(--oficio); text-decoration: underline; }
+.linha-clicavel { cursor: pointer; }
+.linha-clicavel:hover td { background: var(--oficio-claro); }
+.gab-nome { display: block; color: #fff; font-size: .95rem; }
+
+/* capa da emenda: 4 colunas de dados (reaproveita .capa do Kasiski) */
+.capa-campos small { display: block; font-size: .75rem; color: var(--grafite); }
+.capa-campos b { display: block; overflow-wrap: anywhere; }
+@media (min-width: 900px) { .capa-campos { grid-template-columns: repeat(4, 1fr); } .capa-campos div:nth-child(3n) { border-right: 1px solid var(--linha); } .capa-campos div:nth-child(4n) { border-right: 0; } }
+
+/* trilho de execução financeira: empenhado (azul claro) sob pago (ciano) */
+.trilho-execucao { position: relative; height: 10px; border-radius: 5px; background: var(--linha); overflow: hidden; }
+.trilho-execucao span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; }
+.trilho-execucao .emp { background: var(--linha-forte); }
+.trilho-execucao .pago { background: var(--ciano); }
+
+/* etapas da despesa (Lei 4.320): empenho → liquidação → pagamento */
+.etapas-fase { display: flex; list-style: none; padding: 14px 22px; margin: 0; gap: 0; counter-reset: etapa; }
+.etapas-fase li { flex: 1; position: relative; padding-top: 22px; font-size: .82rem; color: var(--grafite); text-align: center; }
+.etapas-fase li::before { content: ""; position: absolute; top: 4px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--linha-forte); z-index: 1; }
+.etapas-fase li::after { content: ""; position: absolute; top: 9px; left: -50%; width: 100%; height: 2px; background: var(--linha-forte); }
+.etapas-fase li:first-child::after { display: none; }
+.etapas-fase li.feita { color: var(--tinta); font-weight: 600; }
+.etapas-fase li.feita::before { background: var(--ciano); border-color: var(--ciano-escuro); }
+.etapas-fase li.feita::after { background: var(--ciano-escuro); }
+
+/* linha do tempo da emenda */
+ol.linha-tempo { list-style: none; margin: 0; padding: 0 0 0 18px; border-left: 2px solid var(--linha); }
+ol.linha-tempo li { position: relative; display: grid; grid-template-columns: 130px 1fr; gap: 12px; padding: 0 0 16px 12px; }
+ol.linha-tempo li::before { content: ""; position: absolute; left: -25px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--oficio); border: 2px solid var(--papel); }
+ol.linha-tempo time { font-size: .8rem; color: var(--grafite); font-feature-settings: "tnum" 1; }
+ol.linha-tempo p { margin: 2px 0; font-size: .85rem; }
+@media (max-width: 640px) { ol.linha-tempo li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* publicações de diário oficial e comunicados */
+.achado, .comunicado { padding: 16px 0; border-bottom: 1px solid var(--linha); }
+.achado:last-child, .comunicado:last-child { border-bottom: 0; }
+.achado-topo { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 8px; font-size: .85rem; }
+.trecho { margin: 0 0 10px; padding: 10px 14px; background: var(--papel); border-left: 3px solid var(--ciano); font-size: .9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.texto-minuta { width: 100%; font: inherit; font-size: .95rem; line-height: 1.6; padding: 12px 14px; border: 1px solid var(--linha-forte); border-radius: var(--raio); background: #fff; resize: vertical; }
+.apontamentos { list-style: none; padding: 0; margin: 8px 0; font-size: .88rem; }
+.apontamentos li { display: flex; gap: 6px; align-items: flex-start; padding: 3px 0; }
+.revisor .apontamentos { margin-top: 6px; }
+.aviso-eleitoral { display: flex; gap: 10px; align-items: flex-start; border-left: 3px solid var(--ambar); background: var(--ambar-claro); color: var(--tinta); }
+.plano-atual { border-color: var(--ciano); box-shadow: 0 0 0 1px var(--ciano); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+
+/* valores em reais nos indicadores: reduz a fonte para caber em 4 colunas */
+.grade-4 .indicador b { font-size: clamp(1.15rem, 1.9vw, 1.7rem); white-space: nowrap; }
+.prazo-capa { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0; padding: 12px 22px; }
+.trilho-execucao { margin: 4px 0 6px; }
+.legenda-trilho { display: flex; gap: 6px 14px; align-items: center; font-size: .8rem; color: var(--grafite); margin: 0 0 22px; }
+.legenda-trilho .pt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: -8px; }
+.legenda-trilho .pt.emp { background: var(--linha-forte); }
+.legenda-trilho .pt.pago { background: var(--ciano); }
+.aviso-eleitoral svg { flex: none; margin-top: 2px; }
+.revisor { margin-bottom: 16px; }
+
+/* versão de teste e contratação */
+.faixa-teste { background: var(--ambar); color: #fff; text-align: center; font-size: .82rem; font-weight: 700; padding: 5px 12px; letter-spacing: .01em; }
+.grupo-form { border: 1px solid var(--linha); border-radius: var(--raio); padding: 12px 16px 4px; margin: 0 0 14px; }
+.grupo-form legend { font-weight: 700; padding: 0 6px; }
+.rotulo-campo { display: block; font-weight: 600; font-size: .88rem; margin-bottom: 6px; }
+.pedido-aberto { border-left: 4px solid var(--ciano); }
+.dl-pedido { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; margin: 0 0 18px; font-size: .92rem; }
+.dl-pedido dt { color: var(--grafite); }
+.dl-pedido dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.acoes-apr { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+tr[data-pedido] input:not([type=checkbox]) { width: 130px; margin: 0 0 4px; padding: 5px 8px; font: inherit; font-size: .82rem; border: 1px solid var(--linha-forte); border-radius: 4px; display: block; }
+.cabecalho .acoes select { width: auto; min-width: 90px; }
