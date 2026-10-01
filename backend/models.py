@@ -75,6 +75,17 @@ class Gabinete(db.Model):
     regimento_texto = db.Column(db.Text)                            # Regimento Interno + Lei Orgânica/Constituição Estadual
     regimento_nome = db.Column(db.String(300))
     comunicado_automatico = db.Column(db.Boolean, default=False)    # gerar rascunhos quando uma emenda muda de fase
+    # dados públicos do TSE (preenchimento automático)
+    partido = db.Column(db.String(30))
+    numero_urna = db.Column(db.String(10))
+    foto_url = db.Column(db.String(400))
+    tse_candidato_id = db.Column(db.String(30))
+    tse_ano = db.Column(db.Integer)
+    # integrações e página pública
+    sapl_url = db.Column(db.String(300))                            # SAPL da Casa (câmaras municipais que usam o Interlegis)
+    slug_publico = db.Column(db.String(80), unique=True)
+    pagina_publica = db.Column(db.Boolean, default=False)
+    whatsapp_alertas = db.Column(db.String(20))                     # telefone do chefe de gabinete (E.164, só dígitos)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
     @property
@@ -90,7 +101,10 @@ class Gabinete(db.Model):
                 "cargo_nome": CARGOS.get(self.cargo, self.cargo), "esfera": self.esfera, "casa": self.casa, "uf": self.uf,
                 "municipio": self.municipio, "codigo_ibge": self.codigo_ibge, "base": self.base,
                 "regimento_nome": self.regimento_nome, "regimento_caracteres": len(self.regimento_texto or ""),
-                "comunicado_automatico": bool(self.comunicado_automatico)}
+                "comunicado_automatico": bool(self.comunicado_automatico), "partido": self.partido,
+                "numero_urna": self.numero_urna, "foto_url": self.foto_url, "tse_ano": self.tse_ano, "sapl_url": self.sapl_url,
+                "slug_publico": self.slug_publico, "pagina_publica": bool(self.pagina_publica),
+                "whatsapp_alertas": self.whatsapp_alertas}
 
 
 # Fases do ciclo de vida de uma emenda (a ordem importa: é a linha do tempo exibida no app)
@@ -118,6 +132,8 @@ class Emenda(db.Model):
     proximo_prazo = db.Column(db.Date)
     proximo_prazo_descricao = db.Column(db.String(300))
     origem = db.Column(db.String(20), default="manual")             # manual / transparencia / transferegov
+    publicar = db.Column(db.Boolean, default=False)                 # aparece na página pública de prestação de contas
+    situacao_plano_acao = db.Column(db.String(60))                  # Transferegov (transferências especiais)
     observacoes = db.Column(db.Text)
     sincronizado_em = db.Column(db.DateTime)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -130,6 +146,9 @@ class Emenda(db.Model):
             d[k] = d[k].isoformat() if d[k] else None
         d["percentual_pago"] = (round(100 * (self.valor_pago or 0) / self.valor_indicado)
                                 if self.valor_indicado else None)
+        from services import risco
+        d["riscos"] = risco.avaliar(self)
+        d["risco"] = risco.nivel(d["riscos"])
         if eventos:
             d["eventos"] = [e.dict() for e in self.eventos]
         return d
@@ -330,3 +349,147 @@ class PedidoContratacao(db.Model):
         if not admin:
             d.pop("aprovado_ip", None)
         return d
+
+
+class LogErro(db.Model):
+    """Erros do sistema (servidor, tarefas e navegador) para a aba Logs do admin — mesmo modelo do Kasiski."""
+    id = db.Column(db.Integer, primary_key=True)
+    origem = db.Column(db.String(20), index=True)
+    nivel = db.Column(db.String(10), default="erro")
+    mensagem = db.Column(db.Text)
+    detalhe = db.Column(db.Text)
+    rota = db.Column(db.String(300))
+    metodo = db.Column(db.String(10))
+    status = db.Column(db.Integer)
+    usuario_email = db.Column(db.String(200))
+    conta_id = db.Column(db.Integer, index=True)
+    navegador = db.Column(db.String(300))
+    assinatura = db.Column(db.String(64), index=True)
+    ocorrencias = db.Column(db.Integer, default=1)
+    resolvido = db.Column(db.Boolean, default=False, index=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    ultimo_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def dict(self, completo=False):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns if completo or c.name != "detalhe"}
+        for k in ("criado_em", "ultimo_em"):
+            d[k] = d[k].isoformat() if d.get(k) else None
+        return d
+
+
+class Lead(db.Model):
+    """Prospecção comercial: gabinetes eleitos (dados públicos do TSE) acompanhados pelo admin."""
+    id = db.Column(db.Integer, primary_key=True)
+    tse_candidato_id = db.Column(db.String(30), unique=True)
+    nome_urna = db.Column(db.String(200))
+    cargo = db.Column(db.String(30))
+    partido = db.Column(db.String(30))
+    uf = db.Column(db.String(2))
+    municipio = db.Column(db.String(120))
+    ano = db.Column(db.Integer)
+    status = db.Column(db.String(20), default="novo")              # novo, contatado, reuniao, proposta, cliente, descartado
+    notas = db.Column(db.Text)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def dict(self):
+        return {c.name: (getattr(self, c.name).isoformat() if isinstance(getattr(self, c.name), datetime) else getattr(self, c.name))
+                for c in self.__table__.columns}
+
+
+class AnaliseProposicao(db.Model):
+    """Copiloto Legislativo: proposição de uma base pública (ou texto enviado) analisada pela IA."""
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    fonte = db.Column(db.String(20))                                # camara, senado, sapl, texto
+    id_externo = db.Column(db.String(60))
+    identificacao = db.Column(db.String(120))                       # PL 4544/2026
+    ementa = db.Column(db.Text)
+    url = db.Column(db.String(600))
+    situacao = db.Column(db.String(300))
+    resultado = db.Column(db.Text)                                  # JSON: resumo, pontos, riscos, comparacao, posicao
+    verificacao = db.Column(db.Text)
+    comparacoes = db.Column(db.Text)                                # JSON: leis/propostas parecidas encontradas
+    modelo = db.Column(db.String(80))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def dict(self, completo=True):
+        d = {"id": self.id, "fonte": self.fonte, "id_externo": self.id_externo, "identificacao": self.identificacao,
+             "ementa": self.ementa, "url": self.url, "situacao": self.situacao,
+             "criado_em": self.criado_em.isoformat() if self.criado_em else None}
+        if completo:
+            d.update({"resultado": _json(self.resultado, {}), "verificacao": _json(self.verificacao, None),
+                      "comparacoes": _json(self.comparacoes, []), "modelo": self.modelo})
+        return d
+
+
+TIPOS_TEMA = {"mandato": "O próprio mandato", "tema": "Tema de interesse", "adversario": "Adversário / figura pública"}
+
+
+class TemaMonitorado(db.Model):
+    """Clipping: o que monitorar (o mandato, um tema, um adversário)."""
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    nome = db.Column(db.String(200), nullable=False)
+    tipo = db.Column(db.String(20), default="tema")
+    termos = db.Column(db.Text)                                     # JSON
+    feeds = db.Column(db.Text)                                      # JSON: URLs de RSS de veículos regionais
+    ativo = db.Column(db.Boolean, default=True)
+    ultima_busca = db.Column(db.DateTime)
+    ultimo_erro = db.Column(db.String(500))
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def dict(self):
+        return {"id": self.id, "nome": self.nome, "tipo": self.tipo, "tipo_nome": TIPOS_TEMA.get(self.tipo, self.tipo),
+                "termos": _json(self.termos, []), "feeds": _json(self.feeds, []), "ativo": bool(self.ativo),
+                "ultima_busca": self.ultima_busca.isoformat() if self.ultima_busca else None, "ultimo_erro": self.ultimo_erro}
+
+
+class Mencao(db.Model):
+    """Uma menção encontrada. Minimização (LGPD): de pessoas comuns não se guarda nome nem perfil — só texto público,
+    link e sentimento. Autor só é guardado quando é veículo de imprensa ou conta pública verificada."""
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    tema_id = db.Column(db.Integer, db.ForeignKey("tema_monitorado.id"), index=True)
+    chave = db.Column(db.String(64), index=True)
+    canal = db.Column(db.String(20))                                # noticia, social, diario
+    rede = db.Column(db.String(20))                                 # instagram, tiktok, x... (social)
+    veiculo = db.Column(db.String(200))
+    titulo = db.Column(db.Text)
+    trecho = db.Column(db.Text)
+    url = db.Column(db.String(800))
+    publicado_em = db.Column(db.DateTime, index=True)
+    sentimento = db.Column(db.String(10))                           # positivo, negativo, neutro
+    crise = db.Column(db.Boolean, default=False)
+    engajamento = db.Column(db.Integer)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def dict(self):
+        return {"id": self.id, "tema_id": self.tema_id, "canal": self.canal, "rede": self.rede, "veiculo": self.veiculo,
+                "titulo": self.titulo, "trecho": self.trecho, "url": self.url,
+                "publicado_em": self.publicado_em.isoformat() if self.publicado_em else None, "sentimento": self.sentimento,
+                "crise": bool(self.crise), "engajamento": self.engajamento}
+
+
+class ResumoDiario(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    data = db.Column(db.Date, index=True)
+    texto = db.Column(db.Text)
+    numeros = db.Column(db.Text)                                    # JSON: totais por sentimento/canal
+    audio = db.Column(db.LargeBinary)                               # MP3 (TTS), opcional
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def dict(self):
+        return {"id": self.id, "data": self.data.isoformat() if self.data else None, "texto": self.texto,
+                "numeros": _json(self.numeros, {}), "tem_audio": bool(self.audio)}
+
+
+class AlertaEnviado(db.Model):
+    """Registro dos alertas de crise (WhatsApp/e-mail), para não repetir o mesmo alerta."""
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    chave = db.Column(db.String(64), index=True)
+    canal = db.Column(db.String(20))
+    texto = db.Column(db.Text)
+    enviado = db.Column(db.Boolean, default=False)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)

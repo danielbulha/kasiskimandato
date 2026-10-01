@@ -3,13 +3,14 @@ const ROTAS = [
   [/^#\/painel$/, "painel"], [/^#\/emendas$/, "emendas"], [/^#\/emendas\/(\d+)$/, "emenda"], [/^#\/diarios$/, "diarios"],
   [/^#\/legislativo$/, "legislativo"], [/^#\/legislativo\/(\d+)$/, "minuta"], [/^#\/comunicacao$/, "comunicacao"],
   [/^#\/gabinete$/, "gabinete"], [/^#\/conta$/, "conta"], [/^#\/admin$/, "admin"], [/^#\/repasses-sp$/, "repassesSP"],
+  [/^#\/copiloto$/, "copiloto"], [/^#\/analises\/(\d+)$/, "analise"], [/^#\/clipping$/, "clipping"],
 ];
 
 const NAV = [
   ["Verbas e orçamento", [["#/emendas", "Emendas", "emendas"], ["#/diarios", "Diários oficiais", "diarios"],
     ["#/repasses-sp", "Repasses do Estado (SP)", "mapa", () => ehSP()]]],
-  ["Produção legislativa", [["#/legislativo", "Minutas legislativas", "legislativo"]]],
-  ["Comunicação", [["#/comunicacao", "Central de comunicação", "comunicacao"]]],
+  ["Produção legislativa", [["#/copiloto", "Copiloto Legislativo", "buscar"], ["#/legislativo", "Minutas legislativas", "legislativo"]]],
+  ["Comunicação e imagem", [["#/clipping", "Clipping e sentimento", "olho"], ["#/comunicacao", "Central de comunicação", "comunicacao"]]],
 ];
 
 const ehSP = () => { const g = gabineteAtual(); return !!g && (g.uf === "SP" || (g.base || []).some((m) => m.uf === "SP")); };
@@ -57,6 +58,8 @@ async function navegar() {
   const hash = location.hash && location.hash !== "#" ? location.hash.split("?")[0] : "#/";
   const raiz = $("#raiz");
   if (hash === "#/") { location.hash = S.token ? "#/painel" : "#/entrar"; return; }
+  const pub = hash.match(/^#\/p\/([a-z0-9-]+)$/);
+  if (pub) { telaPublica(raiz, pub[1]); return; }
   if (hash === "#/aprovar") { telaAprovacao(raiz, new URLSearchParams(location.hash.split("?")[1] || "").get("t")); return; }
   if (hash === "#/verificar") { if (S.token) { location.hash = "#/painel"; return; } telaVerificacao(raiz); return; }
   if (["#/entrar", "#/cadastro"].includes(hash)) {
@@ -242,6 +245,43 @@ async function telaAprovacao(raiz, token) {
   $("#form-apr").onsubmit = (ev) => { ev.preventDefault(); decidir("aprovar", ev.submitter || $("[data-decisao=aprovar]")); };
   $("[data-decisao=recusar]").onclick = (ev) => decidir("recusar", ev.currentTarget);
 }
+
+// ---------------------------------------------------------------- página pública de prestação de contas
+async function telaPublica(raiz, slug) {
+  raiz.innerHTML = `<main class="publica"><p class="carregando">Carregando…</p></main>`;
+  const box = $(".publica");
+  try {
+    const d = await api("GET", `/api/public/prestacao/${slug}`);
+    const fases = { aprovada: "Aprovada no orçamento", empenhada: "Empenhada", liquidada: "Liquidada", paga: "Paga", executada: "Obra/serviço entregue", impedida: "Em ajuste", indicada: "Indicada" };
+    document.title = `Emendas de ${d.parlamentar} — prestação de contas`;
+    box.innerHTML = `<header class="publica-topo">${d.foto_url ? `<img src="${esc(d.foto_url)}" alt="" width="72" height="96">` : ""}
+        <div><p class="fraco">${esc(d.cargo || "")}${d.partido ? " · " + esc(d.partido) : ""}${d.uf ? " · " + esc(d.uf) : ""}</p><h1>${esc(d.parlamentar)}</h1>
+        <p>Prestação de contas das emendas parlamentares</p></div></header>
+      <div class="grade grade-2 bloco"><div class="indicador"><b>${fmt.moeda(d.total_indicado)}</b><span>destinados</span></div>
+        <div class="indicador"><b>${fmt.moeda(d.total_pago)}</b><span>já pagos aos beneficiários</span></div></div>
+      ${d.municipios.map((m) => `<section class="bloco"><div class="bloco-titulo"><h2>${esc(m.municipio)}</h2><b>${fmt.moeda(m.total_indicado)}</b></div>
+        ${m.emendas.map((e) => `<div class="lista-item"><div class="corpo"><b>${esc(e.objeto || "Emenda " + (e.numero || ""))}</b>
+          <p>${esc(e.beneficiario || "")}${e.ano ? " · " + e.ano : ""} · destinado ${fmt.moeda(e.valor_indicado)} · pago ${fmt.moeda(e.valor_pago)}</p>
+          ${e.linha_do_tempo.length ? `<p class="fraco">${e.linha_do_tempo.map((t) => `${fmt.data(t.data)}: ${esc(t.descricao)}`).join(" · ")}</p>` : ""}</div>
+          ${carimbo(fases[e.fase] || e.fase, e.fase === "paga" || e.fase === "executada" ? "ok" : "aviso")}</div>`).join("")}
+        <button class="botao pequeno secundario" data-comp="${esc(m.municipio)}">${icone("copiar", 14)} Copiar texto para as redes</button></section>`).join("")}
+      <p class="fraco">Valores do Portal da Transparência, Transferegov.br e diários oficiais, atualizados diariamente.</p>
+      <footer class="publica-rodape"><a href="${MANDATO.SITE_URL}/mandato/" target="_blank" rel="noopener">${simboloMarca(22)} <span>Feito com o <b>Kasiski Mandato</b></span></a></footer>`;
+    $$("[data-comp]", box).forEach((b) => (b.onclick = () => { const m = d.municipios.find((x) => x.municipio === b.dataset.comp);
+      copiar(`${m.municipio} recebeu ${fmt.moeda(m.total_indicado)} em emendas do mandato de ${d.parlamentar}` +
+        (m.total_pago ? `, dos quais ${fmt.moeda(m.total_pago)} já foram pagos` : "") + `. Veja o andamento de cada uma: ${location.href}`); }));
+  } catch (e) { box.innerHTML = `<h1>Página não encontrada</h1><p>${esc(e.message)}</p>`; }
+}
+
+// Erros de JavaScript vão para a aba Logs do admin (sem dados de formulário).
+let _errosEnviados = 0;
+function enviarErro(mensagem, pilha) {
+  if (_errosEnviados++ > 5) return;
+  fetch(MANDATO.API_URL + "/api/logs/navegador", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mensagem: String(mensagem).slice(0, 1000), pilha: String(pilha || "").slice(0, 4000), tela: location.hash.split("?")[0] }) }).catch(() => {});
+}
+window.addEventListener("error", (e) => enviarErro(e.message, e.error && e.error.stack));
+window.addEventListener("unhandledrejection", (e) => enviarErro(e.reason && e.reason.message || e.reason, e.reason && e.reason.stack));
 
 window.addEventListener("hashchange", navegar);
 navegar();

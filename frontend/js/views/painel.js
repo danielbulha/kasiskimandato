@@ -29,12 +29,15 @@ V.painel = async (el) => {
     </div>
     <div class="trilho-execucao" role="img" aria-label="Execução financeira: empenhado e pago sobre o indicado"><span style="width:${t.indicado ? Math.min(100, (100 * t.empenhado) / t.indicado) : 0}%" class="emp"></span><span style="width:${pct}%" class="pago"></span></div>${legenda}
     <div class="grade grade-2">
+      ${(p.riscos || []).length ? `<section class="bloco"><div class="bloco-titulo"><h2>Risco de perder o recurso</h2><a href="#/emendas">Todas as emendas</a></div>
+        ${p.riscos.slice(0, 6).map((r) => `<a class="lista-item link-item" href="#/emendas/${r.emenda_id}"><div class="corpo"><b>${esc(r.emenda)}</b><p>${esc(r.motivo)} — ${esc(r.acao)}</p></div>
+          ${carimbo(r.nivel === "alto" ? "Alto" : "Médio", r.nivel === "alto" ? "erro" : "aviso")}</a>`).join("")}</section>` : `
       <section class="bloco"><div class="bloco-titulo"><h2>Exige ação</h2><a href="#/emendas">Todas as emendas</a></div>
         ${[...p.impedidas.map((e) => ({ e, motivo: carimbo("Impedida", "erro") })), ...p.prazos.filter((e) => e.fase !== "impedida").map((e) => ({ e, motivo: carimboPrazo(e.proximo_prazo) }))]
           .map(({ e, motivo }) => `<a class="lista-item link-item" href="#/emendas/${e.id}"><div class="corpo"><b>${esc(e.numero ? "Emenda " + e.numero : e.objeto)}</b>
             <p>${esc(e.proximo_prazo_descricao || e.beneficiario || e.objeto || "")}</p></div>${motivo}</a>`).join("")
           || vazio("Nada travado", "Emendas impedidas e prazos dos próximos 15 dias aparecem aqui.")}
-      </section>
+      </section>`}
       <section class="bloco"><div class="bloco-titulo"><h2>Últimas movimentações</h2>${p.rascunhos ? `<a href="#/comunicacao">${p.rascunhos} rascunho(s) para revisar</a>` : ""}</div>
         ${p.eventos.length ? p.eventos.map((ev) => `<a class="lista-item link-item" href="#/emendas/${ev.emenda_id}"><div class="corpo"><b>${esc(ev.descricao)}</b>
           <p>${fmt.data(ev.data)} · ${esc(ev.emenda)} · ${esc(ev.fonte || "")}</p></div>${ev.fase ? carimboStatus(ROTULOS.fase, ev.fase) : ""}</a>`).join("")

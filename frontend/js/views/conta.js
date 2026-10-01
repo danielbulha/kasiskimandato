@@ -30,9 +30,14 @@ V.conta = async (el) => {
     <section class="bloco"><h2>Planos</h2><div class="grade-planos grade-planos-5">${S.ordem.map((k) => { const x = S.planos[k]; return `
       <div class="plano ${x.destaque ? "destaque-plano" : ""} ${p.codigo === k ? "plano-atual" : ""}"><h3>${esc(x.nome)}</h3><p class="plano-slogan">${esc(x.publico)}</p>
         <p class="preco">${x.preco === null ? "Sob consulta" : x.preco === 0 ? "Grátis" : fmt.moeda(x.preco) + "<small>/mês</small>"}</p>
-        <ul><li>${x.emendas === null ? "Emendas ilimitadas" : x.emendas + " emendas"}</li><li>${x.minutas} minutas/mês</li><li>${x.comunicados} comunicados/mês</li>
-          <li>${x.monitores} monitor(es) de diário</li><li>${x.usuarios} usuário(s)</li>
-          <li>${x.sincronizacao ? "Sincronização diária automática" : "Rastreio manual"}</li><li>${x.comunicado_automatico ? "Rascunhos automáticos" : "Sem rascunhos automáticos"}</li></ul>
+        <ul>${x.modulos.includes("legislativo") ? `<li>Copiloto Legislativo (${x.analises} análises/mês)</li>` : ""}
+          ${x.modulos.includes("gestor") ? "<li>Alertas de risco e página pública</li>" : ""}
+          ${x.modulos.includes("clipping") ? `<li>Clipping e sentimento (${x.temas} temas)</li>` : ""}
+          ${x.modulos.includes("alertas") ? "<li>Crise no WhatsApp e pauta do dia em áudio</li>" : ""}
+          ${x.modulos.includes("social") ? "<li>Instagram, TikTok e X (social listening)</li>" : ""}
+          <li>${x.emendas === null ? "Emendas ilimitadas" : x.emendas + " emendas"} · ${x.monitores} monitor(es) de diário</li>
+          <li>${x.minutas} minutas e ${x.comunicados} comunicados/mês</li><li>${x.usuarios} usuário(s)</li>
+          <li>${x.sincronizacao ? "Sincronização diária automática" : "Rastreio manual"}</li></ul>
         ${p.codigo === k ? carimbo("Plano atual", "ok") : k === "institucional" ? `<a class="botao secundario" href="mailto:${MANDATO.CONTATO}?subject=Kasiski%20Mandato%20Institucional">Falar com a gente</a>`
           : k !== "free" ? `<button class="botao ${x.destaque ? "" : "secundario"}" data-contratar="${k}" ${aberto ? "disabled title='Conclua ou cancele o pedido em andamento'" : ""}>Contratar</button>` : ""}</div>`; }).join("")}</div>
       <p class="fraco">Anual: pague ${op.anual_meses_pagos} meses e use 12. A liberação de qualquer plano exige aprovação pelo e-mail oficial do gabinete (${op.dominios_oficiais.join(" ou ")}).</p></section>

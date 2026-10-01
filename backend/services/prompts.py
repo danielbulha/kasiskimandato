@@ -132,3 +132,66 @@ def demo_comunicado(formato, fatos):
                       f"está na fase: {e.get('fase') or 'a informar'}. Valor de referência: R$ {valor:,.2f}."
                       .replace(",", "X").replace(".", ",").replace("X", ".")),
             "alertas": ["Modo demonstração: configure as chaves de IA para textos reais."]}
+
+
+# ------------------------------------------------------------------------------------------ análise de proposição
+SISTEMA_ANALISE = """Você é consultor legislativo sênior no Brasil. Analise a proposição para um gabinete parlamentar com
+equipe pequena, que precisa decidir rápido como votar, emendar ou se posicionar.
+
+Regras:
+- Baseie-se SOMENTE no texto e nos dados fornecidos. Se o texto integral não veio, diga que a análise se apoia na ementa.
+- Riscos de inconstitucionalidade são APONTAMENTOS para revisão jurídica, nunca um parecer conclusivo. Para cada um,
+  diga o fundamento (ex.: CF art. 61, §1º — iniciativa reservada; art. 22 — competência privativa da União).
+- Na comparação, use apenas as leis/propostas listadas em "NORMAS PARECIDAS"; não invente leis de outros entes.
+- Português claro, frases curtas.
+
+Formato do JSON:
+{"resumo": ["5 a 10 bullets com o que a proposição faz"],
+ "pontos_de_atencao": ["efeitos práticos, quem ganha/perde, prazos, custos"],
+ "riscos": [{"tipo": "iniciativa|competencia|material|orcamentario|tecnica", "gravidade": "alta|media|baixa",
+             "explicacao": "...", "fundamento": "..."}],
+ "impacto_orcamentario": "...",
+ "comparacao": [{"ente": "...", "o_que_ha": "...", "diferenca": "..."}],
+ "sugestoes": ["emendas possíveis, pontos para melhorar ou perguntas para a relatoria"],
+ "posicionamento": "síntese neutra dos argumentos a favor e contra, sem recomendar voto"}"""
+
+SISTEMA_VERIF_ANALISE = """Você revisa uma análise legislativa escrita por outro modelo. Aponte: afirmações que não
+estão no texto fornecido, riscos de inconstitucionalidade exagerados ou sem fundamento, e leis citadas na comparação que
+não aparecem na lista fornecida. Formato: {"confirmado": true|false, "comentario": "...",
+"apontamentos": [{"gravidade": "alta|media|baixa", "texto": "..."}]}"""
+
+
+def usuario_analise(gab, identificacao, ementa, situacao, texto, parecidas, base):
+    return f"""Gabinete: {CARGOS.get(gab.cargo, gab.cargo)} {gab.nome_parlamentar or gab.parlamentar} — {gab.casa or ""} ({gab.uf or ""}).
+Proposição: {identificacao}
+Ementa: {ementa or "(sem ementa)"}
+Situação: {situacao or "(não informada)"}
+
+=== TEXTO INTEGRAL ({"completo" if texto else "indisponível — use a ementa"}) ===
+{(texto or "")[:120000]}
+
+=== NORMAS PARECIDAS EM OUTROS ENTES ===
+{json.dumps(parecidas, ensure_ascii=False)[:12000] if parecidas else "(nenhuma encontrada)"}
+
+=== BASE JURÍDICA ===
+{base}"""
+
+
+def demo_analise(identificacao, ementa):
+    return {"resumo": [f"Demonstração: análise de {identificacao}.", (ementa or "")[:200]],
+            "pontos_de_atencao": ["Configure as chaves de IA para uma análise real."],
+            "riscos": [{"tipo": "iniciativa", "gravidade": "media", "explicacao": "Exemplo de apontamento.",
+                        "fundamento": "CF, art. 61, §1º"}],
+            "impacto_orcamentario": "Não avaliado no modo demonstração.", "comparacao": [],
+            "sugestoes": ["Exemplo de sugestão."], "posicionamento": "Exemplo de síntese neutra."}
+
+
+# ------------------------------------------------------------------------------------------ clipping
+SISTEMA_SENTIMENTO = """Classifique cada menção sobre um mandato parlamentar. Para cada item, diga o sentimento EM RELAÇÃO
+AO MANDATO/TEMA monitorado (não o tom geral do texto) e se é potencial crise (acusação, escândalo, denúncia, erro grave,
+repercussão negativa crescente). Formato: {"itens": [{"i": 0, "sentimento": "positivo|negativo|neutro", "crise": false}]}"""
+
+SISTEMA_RESUMO = """Você prepara a "pauta do dia" de um gabinete parlamentar a partir das menções das últimas 24 horas.
+Texto corrido para ser LIDO EM VOZ ALTA em até 2 minutos: comece pelo que exige ação (crises, críticas), depois o que é
+positivo e o que é tendência. Cite veículos, nunca nomes de cidadãos comuns. Termine com 2 ou 3 sugestões de ação.
+Formato: {"texto": "..."}"""

@@ -34,6 +34,10 @@ def rodar():
             if p["sincronizacao"] or planos.plano_atual(conta) == "free":
                 for m in sincronizacao.monitores_ativos(gab):
                     novidades["achados"] += sincronizacao.rodar_monitor(m, gab)
+            if planos.tem_modulo(conta, "gestor"):
+                from models import Emenda
+                from services import risco
+                novidades["riscos"] = sum(1 for e in Emenda.query.filter_by(gabinete_id=gab.id).all() if risco.nivel(risco.avaliar(e)) == "alto")
             automacoes.resumo_diario(gab, novidades)
             app.logger.info("Gabinete %s: %s", gab.id, novidades)
 

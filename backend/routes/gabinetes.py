@@ -1,5 +1,6 @@
 """Gabinetes (o parlamentar atendido), base territorial e Regimento Interno."""
 import json
+import re
 
 from flask import Blueprint, current_app, g, jsonify, request
 
@@ -15,9 +16,37 @@ UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC S
 
 
 def _aplicar(gab, d):
-    for campo in ("parlamentar", "nome_parlamentar", "casa", "municipio", "codigo_ibge"):
+    for campo in ("parlamentar", "nome_parlamentar", "casa", "municipio", "codigo_ibge", "partido", "numero_urna",
+                  "tse_candidato_id"):
         if campo in d:
-            setattr(gab, campo, (d.get(campo) or "").strip()[:200] or None)
+            setattr(gab, campo, (str(d.get(campo) or "")).strip()[:200] or None)
+    if "foto_url" in d:
+        f = (d.get("foto_url") or "").strip()
+        gab.foto_url = f[:400] if f.startswith("https://") else None
+    if "tse_ano" in d:
+        gab.tse_ano = int(d["tse_ano"]) if str(d.get("tse_ano") or "").isdigit() else None
+    if "sapl_url" in d:
+        u = (d.get("sapl_url") or "").strip().rstrip("/")
+        if u and not u.startswith("https://"):
+            raise ErroAPI("O endereço do SAPL deve começar com https://")
+        gab.sapl_url = u[:300] or None
+    if "whatsapp_alertas" in d:
+        tel = re.sub(r"\D", "", d.get("whatsapp_alertas") or "")
+        if tel and not 12 <= len(tel) <= 13:
+            raise ErroAPI("WhatsApp com DDI e DDD, ex.: 55 11 99999-0000.")
+        gab.whatsapp_alertas = tel or None
+    if "pagina_publica" in d:
+        ligar = bool(d["pagina_publica"]) and str(d["pagina_publica"]).lower() not in ("false", "0")
+        if ligar:
+            planos.exigir_modulo("gestor")
+            if not gab.slug_publico:
+                base = re.sub(r"[^a-z0-9]+", "-", dados_publicos.sem_acento(gab.nome_parlamentar or gab.parlamentar or "gabinete")).strip("-")[:50]
+                slug, n = base or "gabinete", 1
+                while Gabinete.query.filter(Gabinete.slug_publico == slug, Gabinete.id != gab.id).first():
+                    n += 1
+                    slug = f"{base}-{n}"
+                gab.slug_publico = slug
+        gab.pagina_publica = ligar
     if "cargo" in d:
         if d["cargo"] not in CARGOS:
             raise ErroAPI("Cargo inválido.")
@@ -132,3 +161,16 @@ def cobertura():
     """O município está no Querido Diário? (define se o monitor de diários funciona lá)."""
     return jsonify({"querido_diario": dados_publicos.cobertura_querido_diario(request.args.get("nome", ""),
                                                                               request.args.get("uf", ""))})
+
+
+# ------------------------------------------------------------------ TSE: preenchimento automático
+@bp.get("/tse/eleitos")
+@login_requerido
+def tse_eleitos():
+    from services import tse
+    cargo, uf = request.args.get("cargo"), request.args.get("uf")
+    lista = tse.eleitos(cargo, uf, request.args.get("municipio"), request.args.get("q"),
+                        so_eleitos=request.args.get("todos") != "1")
+    for c in lista:
+        c["casa"] = tse.casa_sugerida(cargo, (uf or "").upper(), c.get("municipio"))
+    return jsonify(lista[:60])

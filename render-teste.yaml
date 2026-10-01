@@ -1,0 +1,71 @@
+# VERSÃO DE TESTE do Kasiski Mandato — serviço, cron e banco separados da produção.
+# No Render: New → Blueprint → mesmo repositório → "Blueprint file path" = render-teste.yaml
+# Mercado Pago com credenciais de TESTE (TEST-...), e-mail opcional (sem Resend o link de aprovação aparece na tela).
+services:
+  - type: web
+    name: mandato-api-teste
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 300 --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/saude
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: AMBIENTE
+        value: teste
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mandato-db-teste
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: https://teste-mandato.kasiski.com.br
+      - key: FRONTEND_URL
+        value: https://teste-mandato.kasiski.com.br
+      - key: BACKEND_URL
+        sync: false
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: TESTE_QUALQUER_EMAIL
+        value: nao                 # "sim" aceita qualquer e-mail como oficial (só para demonstrar sem e-mail .leg.br)
+      - key: MP_ACCESS_TOKEN
+        sync: false                # credencial de TESTE do Mercado Pago (começa com TEST-)
+      - key: MP_WEBHOOK_SECRET
+        sync: false
+      - key: MP_EMAIL_COMPRADOR_TESTE
+        sync: false                # e-mail do usuário comprador de teste criado no painel do Mercado Pago
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PORTAL_TRANSPARENCIA_KEY
+        sync: false
+      - key: DOE_SP_ATIVO
+        value: sim
+      - key: GOOGLE_NEWS_ATIVO
+        value: sim
+      - key: SOCIAL_API_URL
+        sync: false                # endpoint do fornecedor de social listening (plano Completo)
+      - key: SOCIAL_API_TOKEN
+        sync: false
+      - key: WA_TOKEN
+        sync: false                # WhatsApp Business Cloud API (Meta)
+      - key: WA_PHONE_ID
+        sync: false
+      - key: WA_TEMPLATE
+        value: alerta_mandato
+      - key: RESEND_API_KEY
+        sync: false
+      - key: VERIFICAR_EMAIL
+        value: auto
+      - key: ELEICOES
+        value: 2026-10-04:geral,2028-10-01:municipal
+
+databases:
+  - name: mandato-db-teste
+    plan: free

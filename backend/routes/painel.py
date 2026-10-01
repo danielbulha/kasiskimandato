@@ -6,7 +6,9 @@ from flask import Blueprint, jsonify
 from auth import login_requerido
 from models import AchadoDiario, Comunicado, Emenda, EventoEmenda
 from routes import gabinete_da_conta
-from services import eleitoral
+from services import eleitoral, risco
+import planos
+from flask import g
 
 bp = Blueprint("painel", __name__, url_prefix="/api")
 
@@ -35,4 +37,7 @@ def painel(gid):
         "rascunhos": Comunicado.query.filter_by(gabinete_id=gab.id, status="rascunho").count(),
         "periodo_eleitoral": eleitoral.situacao(gab.esfera),
         "regimento": bool(gab.regimento_texto), "base": len(gab.base),
+        "riscos": sorted([{"emenda_id": e.id, "emenda": (e.numero or e.objeto or "")[:80], **r}
+                          for e in emendas for r in risco.avaliar(e)], key=lambda x: risco.ORDEM[x["nivel"]])[:12],
+        "modulos": planos.PLANOS[planos.plano_atual(g.conta)]["modulos"],
     })

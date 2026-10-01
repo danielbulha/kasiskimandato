@@ -89,12 +89,21 @@ def sincronizar_federal(gab, limite_novas=None, anos=None):
             if ev:
                 eventos.append(ev)
             e.sincronizado_em = datetime.utcnow()
-    for p in dados_publicos.planos_acao_especiais(nome, anos[0]):
-        e = Emenda.query.filter_by(gabinete_id=gab.id, numero=p["numero_emenda"]).first() if p["numero_emenda"] else None
-        if e and p["impedimento"] and e.fase not in ("paga", "impedida"):
-            ev = mudar_fase(e, "impedida", fonte="Transferegov.br", descricao=f"Impedimento: {p['impedimento']}")
-            if ev:
-                eventos.append(ev)
+    for ano in anos:
+        for p in dados_publicos.planos_acao_especiais(nome, ano):
+            if not p["numero_emenda"]:
+                continue
+            e = Emenda.query.filter_by(gabinete_id=gab.id, codigo_externo=p["numero_emenda"]).first() \
+                or Emenda.query.filter_by(gabinete_id=gab.id, numero=p["numero_emenda"]).first()
+            if not e:
+                continue
+            if p["situacao"] and p["situacao"] != e.situacao_plano_acao:
+                registrar_evento(e, "nota", f"Plano de ação no Transferegov: {p['situacao']}", fonte="Transferegov.br")
+                e.situacao_plano_acao = p["situacao"][:60]
+            if p["impedimento"] and e.fase not in ("paga", "impedida", "executada", "cancelada"):
+                ev = mudar_fase(e, "impedida", fonte="Transferegov.br", descricao=f"Impedimento: {p['impedimento']}")
+                if ev:
+                    eventos.append(ev)
     db.session.commit()
     return {"novas": novas, "atualizadas": atualizadas, "eventos": len(eventos), "eventos_ids": [x.id for x in eventos]}
 
@@ -154,7 +163,8 @@ def rodar_monitor(m, gab, dias_iniciais=30):
             continue
         classe = classificar(a["trecho"])
         emenda = next((e for e in emendas if e.numero in (a["trecho"] or "")), None)
-        termo = next((t.strip('"') for t in termos if t.strip('"').lower() in (a["trecho"] or "").lower()), termos[0].strip('"'))
+        termo = (a.get("termos_achados") or [None])[0] or next((t.strip('"') for t in termos if t.strip('"').lower() in (a["trecho"] or "").lower()),
+                                                             termos[0].strip('"'))
         try:
             dp = datetime.strptime(a["data"], "%Y-%m-%d").date() if a.get("data") else None
         except ValueError:

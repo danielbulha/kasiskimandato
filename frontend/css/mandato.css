@@ -73,3 +73,32 @@ ol.linha-tempo p { margin: 2px 0; font-size: .85rem; }
 .acoes-apr { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
 tr[data-pedido] input:not([type=checkbox]) { width: 130px; margin: 0 0 4px; padding: 5px 8px; font: inherit; font-size: .82rem; border: 1px solid var(--linha-forte); border-radius: 4px; display: block; }
 .cabecalho .acoes select { width: auto; min-width: 90px; }
+
+/* TSE, copiloto, clipping, página pública */
+.tse-resultados { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin: 12px 0; }
+.tse-item { display: flex; gap: 10px; align-items: center; text-align: left; background: #fff; border: 1px solid var(--linha); border-radius: var(--raio);
+  padding: 8px 10px; font: inherit; cursor: pointer; }
+.tse-item:hover { border-color: var(--oficio); }
+.tse-item img, .gab-tse img { border-radius: 4px; object-fit: cover; background: var(--oficio-claro); }
+.tse-item span { display: flex; flex-direction: column; }
+.tse-item small { color: var(--grafite); font-size: .78rem; }
+.gab-tse { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; }
+.colar { margin-top: 14px; }
+.colar summary { cursor: pointer; font-weight: 600; }
+.barras-sent { display: grid; grid-template-columns: repeat(14, 1fr); gap: 6px; align-items: end; height: 140px; padding-top: 8px; }
+.barra-dia { display: flex; flex-direction: column-reverse; height: 100%; position: relative; padding-bottom: 18px; }
+.barra-dia span { display: block; width: 100%; }
+.barra-dia .pos { background: var(--visto); } .barra-dia .neu { background: var(--linha-forte); } .barra-dia .neg { background: var(--carimbo); }
+.barra-dia span:last-of-type { border-radius: 3px 3px 0 0; }
+.barra-dia small { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: .7rem; color: var(--grafite); }
+.mencao-crise { border-left: 3px solid var(--carimbo); padding-left: 12px; }
+.resumo-texto { white-space: pre-wrap; line-height: 1.65; }
+audio { width: 100%; max-width: 520px; margin-top: 8px; }
+.risco-alto { color: var(--carimbo); font-weight: 700; } .risco-medio { color: var(--ambar); font-weight: 700; }
+.publica { max-width: 980px; margin: 0 auto; padding: 24px 18px 60px; }
+.publica-topo { display: flex; gap: 16px; align-items: center; margin-bottom: 18px; }
+.publica-topo img { border-radius: 8px; object-fit: cover; }
+.publica h1 { margin: 0; }
+.pre-log { white-space: pre-wrap; font-size: .78rem; background: var(--papel); padding: 12px; border-radius: var(--raio); max-height: 50vh; overflow: auto; }
+.publica-rodape { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--linha); }
+.publica-rodape a { display: inline-flex; gap: 8px; align-items: center; color: var(--grafite); text-decoration: none; font-size: .85rem; }

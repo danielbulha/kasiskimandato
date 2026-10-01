@@ -81,3 +81,14 @@ def ver_conta():
     return jsonify({"usuario": {**g.usuario.dict(), "admin": g.admin}, "conta": {"id": g.conta.id, "nome": g.conta.nome},
                     "plano": planos.resumo(g.conta), "planos": planos.PLANOS, "ordem": planos.ORDEM,
                     "modo_demonstracao": llm.modo_demonstracao(), "gabinetes": [x.dict() for x in gabs]})
+
+
+@bp.post("/logs/navegador")
+def log_navegador():
+    """Erros de JavaScript do app vão para a aba Logs do admin (sem corpo de requisição, senha ou token)."""
+    from flask import request
+    from services import logs
+    d = dados()
+    logs.registrar("navegador", (d.get("mensagem") or "")[:1000], (d.get("pilha") or "")[:4000],
+                   rota=(d.get("tela") or "")[:300], navegador=(request.headers.get("User-Agent") or "")[:300])
+    return jsonify({"ok": True})

@@ -67,7 +67,7 @@ async function modalMonitor(gab, aoSalvar) {
   const m = modal({ titulo: "Novo monitor de diário oficial", largo: true, corpo: `
     <div class="campo"><label for="mo-f">Onde procurar</label><select id="mo-f">
       <option value="querido_diario">Diários oficiais dos municípios da base (Querido Diário)</option>
-      <option value="doe_sp" ${fontes.doe_sp ? "" : "disabled"}>Diário Oficial do Estado de São Paulo${fontes.doe_sp ? "" : " — aguardando credencial da API"}</option></select></div>
+      <option value="doe_sp" ${fontes.doe_sp ? "" : "disabled"}>Diário Oficial do Estado de São Paulo${fontes.doe_sp ? "" : " — desligado no servidor"}</option></select></div>
     <div class="campo"><label for="mo-n">Nome do monitor</label><input id="mo-n" value="Menções ao mandato"></div>
     <div class="campo"><label for="mo-t">Termos (um por linha)</label><textarea id="mo-t" rows="4">"${esc(nome)}"\nemenda parlamentar</textarea>
       <small>Use aspas para frase exata. Inclua números de emendas e objetos (ex.: "UBS Jardim Europa").</small></div>

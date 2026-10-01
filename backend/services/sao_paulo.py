@@ -11,11 +11,11 @@ TCE-SP — Portal da Transparência Municipal (https://transparencia.tce.sp.gov.
   ATENÇÃO: a página da API cita os exercícios 2014–2019. Confirme na primeira chamada real se os anos atuais respondem;
   se não, o painel mostra a mensagem do TCE e o controle segue pelo DOE-SP e pelos diários municipais.
 
-DOE-SP — Diário Oficial do Estado. A API oficial é distribuída pelo Integrador de APIs do Estado (integrador.sp.gov.br,
-  login gov.br). Sem a credencial, este conector fica DESLIGADO. Caminho e nomes de parâmetro são configuráveis
-  (DOE_SP_*) porque só serão conhecidos com a documentação entregue no credenciamento.
+DOE-SP — Diário Oficial do Estado. O Integrador de APIs do Estado NÃO tem API de busca de texto das publicações
+  (só metadados da base e envio de matérias). Usamos a mesma busca pública do site doe.sp.gov.br, sem token,
+  conferida com chamada real em 29/09/2026. Não é documentada: se o site mudar, a busca pode quebrar.
 
-Nenhuma destas chamadas foi feita de verdade no ambiente onde o código foi escrito (sem rede para essas APIs).
+A chamada ao TCE-SP ainda não foi feita de verdade; a do DOE-SP foi conferida no navegador.
 """
 import logging
 import re
@@ -104,40 +104,48 @@ def empenhos_municipio(nome_municipio, ano, mes, fornecedor=None):
 
 
 # --------------------------------------------------------------------------- DOE-SP
+SITE_DOE = "https://doe.sp.gov.br/"
+
+
 def doe_configurado():
-    return bool(current_app.config["DOE_SP_API_URL"] and current_app.config["DOE_SP_TOKEN"])
+    return current_app.config["DOE_SP_ATIVO"]
 
 
-def buscar_doe(termos, desde, ate=None):
-    """Busca os termos no Diário Oficial do Estado. Mesmo formato de saída do Querido Diário."""
+def buscar_doe(termos, desde, ate=None, tamanho=20):
+    """Busca os termos no Diário Oficial do Estado (busca pública do doe.sp.gov.br). Vários termos = qualquer um deles.
+
+    Resposta conferida em chamada real: {items:[{id, date, title, slug, excerpt, hierarchy, termsFound:[{term, matchesFound}]}],
+    currentPage, totalPages, totalItems, pageSize, hasNextPage}. Link da publicação = https://doe.sp.gov.br/{slug}.
+    """
     cfg = current_app.config
     if not doe_configurado():
-        raise ErroAPI("DOE-SP ainda não configurado: solicite a credencial da API do Diário Oficial no Integrador de APIs "
-                      "do Estado (integrador.sp.gov.br) e preencha DOE_SP_API_URL e DOE_SP_TOKEN no servidor.", 400, "doe_sp_off")
-    achados = []
-    for termo in termos[:10]:
-        params = {cfg["DOE_SP_PARAM_TERMO"]: termo.strip('"'), cfg["DOE_SP_PARAM_DE"]: desde}
-        if ate:
-            params[cfg["DOE_SP_PARAM_ATE"]] = ate
+        raise ErroAPI("A busca no DOE-SP está desligada no servidor (DOE_SP_ATIVO).", 400, "doe_sp_off")
+    from datetime import date as _date
+    params = {f"Terms[{i}]": t.strip().strip('"') for i, t in enumerate(termos[:10]) if t.strip().strip('"')}
+    params.update({"FromDate": desde, "ToDate": ate or _date.today().isoformat(), "PageSize": tamanho})
+    achados, total = [], 0
+    for pagina in range(1, cfg["DOE_SP_MAX_PAGINAS"] + 1):
+        params["PageNumber"] = pagina
         try:
-            r = requests.get(cfg["DOE_SP_API_URL"] + cfg["DOE_SP_BUSCA_CAMINHO"], params=params, timeout=60,
-                             headers={**UA, "Authorization": f"Bearer {cfg['DOE_SP_TOKEN']}", "Accept": "application/json"})
+            r = requests.get(f"{cfg['DOE_SP_URL']}/advanced-search/publications", params=params, timeout=60,
+                             headers={**UA, "Accept": "application/json", "Origin": "https://doe.sp.gov.br",
+                                      "Referer": "https://doe.sp.gov.br/"})
         except requests.RequestException as e:
-            raise ErroAPI(f"DOE-SP indisponível agora ({e.__class__.__name__}).", 502)
-        if r.status_code in (401, 403):
-            raise ErroAPI("O DOE-SP recusou a credencial. Confira o DOE_SP_TOKEN (pode ter expirado).", 502)
+            raise ErroAPI(f"DOE-SP indisponível agora ({e.__class__.__name__}). A busca roda de novo amanhã.", 502)
         if r.status_code >= 400:
-            raise ErroAPI(f"DOE-SP respondeu {r.status_code}: {r.text[:200]}", 502)
-        d = r.json() or {}
-        itens = d if isinstance(d, list) else next((d[k] for k in ("items", "content", "data", "publications", "results", "hits")
-                                                   if isinstance(d.get(k), list)), [])
-        for it in itens:
-            trecho = _campo(it, "excerpt", "highlight", "snippet", "summary", "content", "text", "title", padrao="")
-            if isinstance(trecho, list):
-                trecho = " … ".join(str(x) for x in trecho)
+            raise ErroAPI(f"DOE-SP respondeu {r.status_code}. Se persistir, o site pode ter mudado a busca.", 502)
+        try:
+            d = r.json() or {}
+        except ValueError:
+            raise ErroAPI("DOE-SP devolveu um formato inesperado (a busca do site pode ter mudado).", 502)
+        total = d.get("totalItems", total)
+        for it in d.get("items") or []:
             achados.append({"territorio": "Estado de São Paulo", "territorio_id": None, "uf": "SP",
-                            "data": str(_campo(it, "date", "publicationDate", "editionDate", "data", padrao=""))[:10] or None,
-                            "url": _campo(it, "url", "link", "pdfUrl", "href", padrao=None),
-                            "trecho": re.sub(r"<[^>]+>", "", str(trecho))[:1500],
-                            "secao": _campo(it, "section", "caderno", "notebook", "journal", padrao=None)})
-    return {"total": len(achados), "achados": achados}
+                            "data": str(it.get("date") or "")[:10] or None,
+                            "url": SITE_DOE + it["slug"] if it.get("slug") else None,
+                            "trecho": re.sub(r"<[^>]+>", "", f"{it.get('title') or ''} — {it.get('excerpt') or ''}").strip(" —")[:1500],
+                            "secao": it.get("hierarchy"),
+                            "termos_achados": [x.get("term") for x in (it.get("termsFound") or []) if x.get("matchesFound")]})
+        if not d.get("hasNextPage"):
+            break
+    return {"total": total, "achados": achados}

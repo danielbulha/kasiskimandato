@@ -25,6 +25,8 @@ def _aplicar(e, d, fonte="manual"):
             setattr(e, c, numero(d.get(c)))
     if "ano" in d:
         e.ano = int(d["ano"]) if str(d.get("ano") or "").isdigit() else None
+    if "publicar" in d:
+        e.publicar = bool(d["publicar"]) and str(d["publicar"]).lower() not in ("false", "0")
     if "esfera" in d and d["esfera"] in ("federal", "estadual", "municipal"):
         e.esfera = d["esfera"]
     if "proximo_prazo" in d:

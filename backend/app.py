@@ -25,6 +25,8 @@ def create_app(config=Config):
 
     from routes import registrar
     registrar(app)
+    from services import logs
+    logs.instalar(app)
 
     @app.get("/api/saude")
     def saude():
@@ -44,6 +46,8 @@ def create_app(config=Config):
 
     @app.errorhandler(ErroAPI)
     def erro_api(e):
+        if e.status >= 500:   # falhas de integração (502) viram aviso na aba Logs; erros de validação (4xx), não
+            logs.registrar("servidor", e.mensagem, status=e.status, nivel="aviso")
         return jsonify({"erro": e.mensagem, "codigo": e.codigo}), e.status
 
     @app.errorhandler(HTTPException)

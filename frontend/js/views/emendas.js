@@ -20,11 +20,13 @@ V.emendas = async (el) => {
       <div class="indicador"><b>${fmt.moeda(d.totais.valor_pago)}</b><span>pago</span></div>
     </div>
     <div class="abas" role="tablist">${["", ...ORDEM_FASES].map((f) => `<button data-fase="${f}" class="${f === filtro ? "ativa" : ""}">${f ? ROTULOS.fase[f][0] : "Todas"}</button>`).join("")}</div>
-    <section class="bloco">${d.emendas.length ? `<div class="tabela-rolagem"><table><thead><tr><th>Emenda</th><th>Objeto / beneficiário</th><th>Indicado</th><th>Pago</th><th>Fase</th><th>Próximo prazo</th></tr></thead><tbody>
+    <section class="bloco">${d.emendas.length ? `<div class="tabela-rolagem"><table><thead><tr><th>Emenda</th><th>Objeto / beneficiário</th><th>Indicado</th><th>Pago</th><th>Fase</th><th>Risco</th><th>Próximo prazo</th></tr></thead><tbody>
       ${d.emendas.map((e) => `<tr class="linha-clicavel" data-id="${e.id}"><td><b>${esc(e.numero || "—")}</b><br><small class="fraco">${e.ano || ""} · ${ROTULOS.esfera[e.esfera]}${e.origem !== "manual" ? " · automática" : ""}</small></td>
         <td>${esc(e.objeto || "")}<br><small class="fraco">${esc(e.beneficiario || e.municipio || "")}</small></td>
         <td>${fmt.moeda(e.valor_indicado)}</td><td>${fmt.moeda(e.valor_pago)}${e.percentual_pago !== null ? `<br><small class="fraco">${e.percentual_pago}%</small>` : ""}</td>
-        <td>${carimboStatus(ROTULOS.fase, e.fase)}</td><td>${e.proximo_prazo ? carimboPrazo(e.proximo_prazo) : "—"}</td></tr>`).join("")}
+        <td>${carimboStatus(ROTULOS.fase, e.fase)}</td>
+        <td>${e.risco ? `<span class="risco-${e.risco}" title="${esc(e.riscos.map((r) => r.motivo).join("; "))}">${e.risco === "alto" ? "Alto" : "Médio"}</span>` : "—"}</td>
+        <td>${e.proximo_prazo ? carimboPrazo(e.proximo_prazo) : "—"}</td></tr>`).join("")}
       </tbody></table></div>` : vazio("Nenhuma emenda por aqui", federal ? "Sincronize com o Portal da Transparência ou cadastre manualmente." : "Cadastre a primeira emenda do mandato.",
         `<button class="botao" data-nova>${icone("adicionar")} Cadastrar emenda</button>`)}</section>`;
   $$("[data-fase]", el).forEach((b) => (b.onclick = () => { sessionStorage.setItem("emendas_fase", b.dataset.fase); V.emendas(el); }));
@@ -69,6 +71,7 @@ function formEmenda(e = {}) {
       <div class="campo"><label for="em-pzd">O que vence</label><input id="em-pzd" name="proximo_prazo_descricao" value="${v("proximo_prazo_descricao")}" placeholder="Ex.: ajuste do plano de trabalho"></div>
     </div>
     <div class="campo"><label for="em-obs">Observações</label><textarea id="em-obs" name="observacoes" rows="2">${v("observacoes")}</textarea></div>
+    <label class="check"><input type="checkbox" name="publicar" ${e.publicar ? "checked" : ""}> Mostrar na página pública de prestação de contas</label>
   </form>`;
 }
 
@@ -106,6 +109,8 @@ V.emenda = async (el, id) => {
       ${["impedida", "cancelada"].includes(e.fase) ? "" : `<ol class="etapas-fase">${passos.map((p, i) => `<li class="${i <= atual ? "feita" : ""}">${ROTULOS.fase[p][0]}</li>`).join("")}</ol>`}
       ${e.proximo_prazo ? `<p class="prazo-capa">${carimboPrazo(e.proximo_prazo)} <span>${esc(e.proximo_prazo_descricao || "Próximo prazo")} — ${fmt.data(e.proximo_prazo)}</span></p>` : ""}
     </div>
+    ${(e.riscos || []).length ? `<section class="bloco"><h2>Risco de perder o recurso</h2>${e.riscos.map((r) => `<div class="lista-item"><div class="corpo"><b class="risco-${r.nivel}">${esc(r.motivo)}</b>
+      <p>${esc(r.acao)}</p></div>${carimbo(r.nivel === "alto" ? "Risco alto" : "Risco médio", r.nivel === "alto" ? "erro" : "aviso")}</div>`).join("")}</section>` : ""}
     <section class="bloco"><div class="bloco-titulo"><h2>Linha do tempo</h2><button class="botao pequeno secundario" id="anotar">${icone("adicionar")} Registrar acontecimento</button></div>
       <ol class="linha-tempo">${e.eventos.map((ev) => `<li><time>${fmt.dataHora(ev.data)}</time><div><b>${esc(ev.descricao)}</b>
         <p class="fraco">${esc(ev.fonte || "")}${ev.valor ? " · " + fmt.moeda(ev.valor) : ""}${ev.url ? ` · <a href="${esc(ev.url)}" target="_blank" rel="noopener">ver publicação</a>` : ""}</p>

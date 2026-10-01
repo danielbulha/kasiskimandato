@@ -48,7 +48,7 @@ class Config:
     QUERIDO_DIARIO_URL = os.getenv("QUERIDO_DIARIO_URL", "https://api.queridodiario.ok.org.br").rstrip("/")
     TRANSFEREGOV_ESPECIAIS_URL = os.getenv("TRANSFEREGOV_ESPECIAIS_URL",
                                            "https://api.transferegov.gestao.gov.br/transferenciasespeciais").rstrip("/")
-    TRANSFEREGOV_ATIVO = os.getenv("TRANSFEREGOV_ATIVO", "nao").lower() in ("sim", "1", "true")
+    TRANSFEREGOV_ATIVO = os.getenv("TRANSFEREGOV_ATIVO", "sim").lower() in ("sim", "1", "true")
     MAX_CHARS_REGIMENTO = int(os.getenv("MAX_CHARS_REGIMENTO", "400000"))
 
     # Período eleitoral (Lei 9.504/97, art. 73, VI, "b" e §3º): nos 3 meses antes do pleito, publicidade institucional
@@ -87,11 +87,21 @@ class Config:
     # ------------------------------------------------------------ Estado de São Paulo
     # TCE-SP: API pública do Portal da Transparência Municipal (receitas e despesas dos municípios paulistas).
     TCE_SP_URL = os.getenv("TCE_SP_URL", "https://transparencia.tce.sp.gov.br/api/json").rstrip("/")
-    # DOE-SP: API oficial do Diário Oficial via Integrador de APIs do Estado (credencial obtida pelo gov.br).
-    # Vazio = desligado. Os nomes de parâmetros ficam configuráveis até conferir a documentação do credenciamento.
-    DOE_SP_API_URL = os.getenv("DOE_SP_API_URL", "").rstrip("/")
-    DOE_SP_TOKEN = os.getenv("DOE_SP_TOKEN", "")
-    DOE_SP_BUSCA_CAMINHO = os.getenv("DOE_SP_BUSCA_CAMINHO", "/publications/search")
-    DOE_SP_PARAM_TERMO = os.getenv("DOE_SP_PARAM_TERMO", "terms")
-    DOE_SP_PARAM_DE = os.getenv("DOE_SP_PARAM_DE", "fromDate")
-    DOE_SP_PARAM_ATE = os.getenv("DOE_SP_PARAM_ATE", "toDate")
+    # DOE-SP: a mesma busca pública usada pelo site doe.sp.gov.br (sem token). Conferida com chamada real em 29/09/2026:
+    # GET {DOE_SP_URL}/advanced-search/publications?Terms[0]=...&FromDate=AAAA-MM-DD&ToDate=...&PageNumber=1&PageSize=20
+    # Não é uma API documentada: se o site mudar, a busca pode quebrar — o monitor mostra o erro e o resto do app segue.
+    DOE_SP_URL = os.getenv("DOE_SP_URL", "https://do-api-web-search.doe.sp.gov.br/v2").rstrip("/")
+    DOE_SP_ATIVO = os.getenv("DOE_SP_ATIVO", "sim").lower() in ("sim", "1", "true")
+    DOE_SP_MAX_PAGINAS = int(os.getenv("DOE_SP_MAX_PAGINAS", "5"))
+
+    # ------------------------------------------------------------ clipping e alertas (Fase B)
+    GOOGLE_NEWS_ATIVO = os.getenv("GOOGLE_NEWS_ATIVO", "sim").lower() in ("sim", "1", "true")
+    SOCIAL_API_URL = os.getenv("SOCIAL_API_URL", "")          # endpoint do fornecedor de social listening
+    SOCIAL_API_TOKEN = os.getenv("SOCIAL_API_TOKEN", "")
+    CRISE_LIMIAR = int(os.getenv("CRISE_LIMIAR", "5"))        # menções negativas em 6h que disparam alerta
+    WA_TOKEN = os.getenv("WA_TOKEN", "")
+    WA_PHONE_ID = os.getenv("WA_PHONE_ID", "")
+    WA_TEMPLATE = os.getenv("WA_TEMPLATE", "alerta_mandato")
+    WA_API_VERSAO = os.getenv("WA_API_VERSAO", "v21.0")
+    MODELO_VOZ = os.getenv("MODELO_VOZ", "gpt-4o-mini-tts")
+    VOZ_RESUMO = os.getenv("VOZ_RESUMO", "alloy")

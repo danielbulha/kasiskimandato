@@ -41,6 +41,8 @@ def resumo_diario(gab, novidades):
         linhas.append(f"{novidades['eventos']} movimentação(ões) em emendas")
     if novidades.get("achados"):
         linhas.append(f"{novidades['achados']} publicação(ões) nova(s) nos diários oficiais")
+    if novidades.get("riscos"):
+        linhas.append(f"{novidades['riscos']} emenda(s) com risco alto de perder o recurso")
     if novidades.get("comunicados"):
         linhas.append(f"{novidades['comunicados']} rascunho(s) de comunicado pronto(s) para revisar")
     link = current_app.config["FRONTEND_URL"] + "/#/painel"
