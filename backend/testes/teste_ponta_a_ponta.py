@@ -19,9 +19,19 @@ PAGO = {"v": "0,00"}
 
 
 class R:
-    def __init__(self, dados, status=200, texto=""):
+    def __init__(self, dados, status=200, texto="", binario=None):
         self._d, self.status_code, self.text = dados, status, texto
-        self.content = texto.encode()
+        self.content = binario if binario is not None else texto.encode()
+
+    def iter_content(self, n):
+        for i in range(0, len(self.content), n):
+            yield self.content[i:i + n]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
 
     def json(self):
         return self._d
@@ -30,7 +40,32 @@ class R:
         pass
 
 
-def falso_get(url, params=None, headers=None, timeout=None):
+def _zip_tse(linhas):
+    import io as _io
+    import zipfile as _zf
+    cab = ["DT_GERACAO", "ANO_ELEICAO", "SG_UF", "SG_UE", "NM_UE", "CD_CARGO", "DS_CARGO", "SQ_CANDIDATO", "NR_CANDIDATO",
+           "NM_CANDIDATO", "NM_URNA_CANDIDATO", "NR_CPF_CANDIDATO", "DS_EMAIL", "DS_COR_RACA", "SG_PARTIDO", "DS_SIT_TOT_TURNO"]
+    csv_txt = ";".join(f'"{c}"' for c in cab) + "\n" + "".join(";".join(f'"{v}"' for v in l) + "\n" for l in linhas)
+    buf = _io.BytesIO()
+    with _zf.ZipFile(buf, "w") as z:
+        z.writestr("consulta_cand_SP.csv", csv_txt.encode("latin-1"))
+        z.writestr("consulta_cand_BRASIL.csv", csv_txt.encode("latin-1"))   # duplicado: deve ser ignorado
+        z.writestr("leiame.pdf", b"x")
+    return buf.getvalue()
+
+
+ZIP_TSE = {
+    2022: _zip_tse([["30/09/2026", "2022", "SP", "SP", "SÃO PAULO", "6", "DEPUTADO FEDERAL", "250001", "1234", "FULANO DE TAL DA SILVA",
+                     "FULANO DE TAL", "12345678900", "x@y.com", "PARDA", "PDT", "ELEITO POR QP"],
+                    ["30/09/2026", "2022", "SP", "SP", "SÃO PAULO", "6", "DEPUTADO FEDERAL", "250002", "5555", "BELTRANO SOUZA",
+                     "BELTRANO", "98765432100", "b@y.com", "BRANCA", "PL", "NÃO ELEITO"]]),
+    2024: _zip_tse([["30/09/2026", "2024", "SP", "66257", "JUQUITIBA", "13", "VEREADOR", "9001", "10978", "ADÉLIA DE SOUZA",
+                     "ADÉLIA DO JUSTINO", "11122233344", "a@y.com", "PRETA", "REPUBLICANOS", "ELEITO"],
+                    ["30/09/2026", "2024", "SP", "66257", "JUQUITIBA", "11", "PREFEITO", "9002", "10", "PREFEITO X", "X", "1", "", "", "PSD", "ELEITO"]]),
+}
+
+
+def falso_get(url, params=None, headers=None, timeout=None, stream=False):
     p = dict(params) if isinstance(params, dict) else {}
     if "api-de-dados/emendas" in url:
         if p.get("pagina") != 1 or p.get("ano") != date.today().year:
@@ -63,23 +98,9 @@ def falso_get(url, params=None, headers=None, timeout=None):
                              "hierarchy": "Executivo > Atos Normativos", "totalTermsFound": 1,
                              "termsFound": [{"term": "Fulano de Tal", "matchesFound": 1}]}],
                   "currentPage": 1, "totalPages": 1, "totalItems": 1, "pageSize": 20, "hasPreviousPage": False, "hasNextPage": False})
-    if "divulgacandcontas.tse.jus.br" in url:
-        if url.endswith("/eleicao/ordinarias"):
-            return R([{"id": 2045202024, "ano": 2024, "nomeEleicao": "Eleições Municipais 2024", "tipoAbrangencia": "M"},
-                      {"id": 2040602022, "ano": 2022, "nomeEleicao": "Eleição Geral Federal 2022", "tipoAbrangencia": "F"}])
-        if "/municipios" in url:
-            return R({"municipios": [{"codigo": "66257", "nome": "JUQUITIBA"}]})
-        if "/candidatura/listar/2022/SP/2040602022/6/" in url:
-            return R({"candidatos": [
-                {"id": 250001, "nomeUrna": "FULANO DE TAL", "nomeCompleto": "FULANO DE TAL DA SILVA", "numero": 1234,
-                 "partido": {"sigla": "PDT"}, "descricaoTotalizacao": "Eleito por QP", "fotoUrl": "https://divulgacandcontas.tse.jus.br/foto.jpg",
-                 "cpf": "NAO-PODE-SAIR", "descricaoCorRaca": "NAO-PODE-SAIR"},
-                {"id": 250002, "nomeUrna": "BELTRANO", "nomeCompleto": "BELTRANO SOUZA", "numero": 5555,
-                 "partido": {"sigla": "PL"}, "descricaoTotalizacao": "Não eleito"}]})
-        if "/candidatura/listar/2024/66257/2045202024/13/" in url:
-            return R({"candidatos": [{"id": 9001, "nomeUrna": "ADELIA DO JUSTINO", "nomeCompleto": "ADELIA", "numero": 10978,
-                                      "partido": {"sigla": "REPUBLICANOS"}, "descricaoTotalizacao": "Eleito"}]})
-        return R({"candidatos": []})
+    if url.startswith("https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_"):
+        ano = int(url.rsplit("_", 1)[1][:4])
+        return R(None, binario=ZIP_TSE.get(ano, b""), status=200 if ano in ZIP_TSE else 404)
     if "dadosabertos.camara.leg.br/api/v2/proposicoes/2641232" in url:
         return R({"dados": {"id": 2641232, "siglaTipo": "PL", "numero": 4544, "ano": 2026, "ementa": "Institui a Política Nacional de Autonomia Digital da Pessoa Idosa.",
                             "statusProposicao": {"descricaoTramitacao": "Apresentação de Proposição", "siglaOrgao": "MESA"},
@@ -134,11 +155,15 @@ def chamar(metodo, url, token=None, **kw):
     return r.status_code, (r.get_json(silent=True) if r.is_json else r)
 
 
-s, d = chamar("post", "/api/auth/registro", json={"nome": "Ana Chefe", "email": "admin@teste.br", "senha": "12345678", "gabinete": "Gab. Fulano"})
+s, d = chamar("post", "/api/auth/registro", json={"nome": "Ana Chefe", "email": "cliente@teste.br", "senha": "12345678", "gabinete": "Gab. Fulano"})
 ok(s == 200 and d.get("token"), "cadastro devolve token (verificação desligada no teste)")
 T = d["token"]
 s, d = chamar("get", "/api/conta", T)
-ok(d["plano"]["codigo"] == "free" and d["usuario"]["admin"], "conta Free e usuário admin")
+ok(d["plano"]["codigo"] == "free" and not d["usuario"]["admin"], "cliente começa no Free")
+s, d = chamar("post", "/api/auth/registro", json={"nome": "Daniel Admin", "email": "admin@teste.br", "senha": "12345678"})
+TA = d["token"]
+s, d = chamar("get", "/api/conta", TA)
+ok(d["usuario"]["admin"] and d["plano"]["codigo"] == "institucional" and d["plano"]["admin"], "conta do admin tem acesso total (Institucional)")
 
 s, d = chamar("post", "/api/gabinetes", T, json={"parlamentar": "Fulano de Tal", "nome_parlamentar": "FULANO DE TAL",
                "cargo": "deputado_federal", "casa": "Câmara dos Deputados", "uf": "SP"})
@@ -152,7 +177,12 @@ ok(d["base"][0]["nome"] == "Juquitiba", "base territorial salva")
 s, d = chamar("post", f"/api/gabinetes/{G}/emendas/sincronizar", T)
 ok(s == 402, "sincronização automática bloqueada no Free")
 s, d = chamar("patch", "/api/admin/contas/1", T, json={"plano": "monitoramento"})
-ok(s == 400, "admin NÃO consegue liberar plano pago sem a aprovação oficial")
+ok(s == 403, "cliente comum não acessa a administração")
+s, d = chamar("patch", "/api/admin/contas/1", TA, json={"plano": "monitoramento", "pago_ate": "2099-12-31", "preco_contratado": "8.500,00"})
+ok(s == 200 and d["plano"] == "monitoramento" and d["receita_mes"] == 8500, "admin muda plano, validade e preço contratado")
+s, d = chamar("get", "/api/admin/crm/1", TA)
+ok(d["historico"] and "monitoramento" in d["historico"][0]["detalhe"] and d["historico"][0]["admin_email"] == "admin@teste.br", "ajuste do admin fica no histórico da conta")
+chamar("patch", "/api/admin/contas/1", TA, json={"preco_contratado": ""})
 
 
 def definir_plano(cod):
@@ -213,7 +243,7 @@ with app.app_context():
 s, d = chamar("get", f"/api/gabinetes/{G}/painel", T)
 ok(d["totais"]["pago"] == 500000 and d["achados_novos"] == 0 and d["rascunhos"] >= 3, "painel consolida totais, achados e rascunhos")
 # ---------------------------------------------------------------- contratação com aprovação pelo e-mail oficial
-chamar("patch", "/api/admin/contas/1", T, json={"plano": "free", "pago_ate": ""})
+chamar("patch", "/api/admin/contas/1", TA, json={"plano": "free", "pago_ate": ""})
 base_pedido = {"plano": "legislativo", "periodicidade": "mensal", "responsavel_nome": "Ana Chefe", "responsavel_cargo": "Chefe de gabinete",
                "responsavel_email": "ana@gmail.com", "responsavel_telefone": "11 99999-0000"}
 s, d = chamar("post", "/api/conta/pedidos", T, json={**base_pedido, "forma": "faturamento", "email_oficial": "ana@gmail.com"})
@@ -240,7 +270,7 @@ s, d = chamar("get", "/api/conta", T)
 ok(d["plano"]["codigo"] == "legislativo" and d["plano"]["pago_ate"], "plano Legislativo ativo com validade")
 s, d = chamar("post", "/api/public/aprovacao", json={"t": tok1, "decisao": "aprovar", "nome": "Fulano de Tal Deputado"})
 ok(s == 404, "link de aprovação é de uso único")
-s, d = chamar("patch", f"/api/admin/pedidos/{P1}", T, json={"empenho": "2026NE000123", "nota_fiscal": "NFS-e 457", "pago": True})
+s, d = chamar("patch", f"/api/admin/pedidos/{P1}", TA, json={"empenho": "2026NE000123", "nota_fiscal": "NFS-e 457", "pago": True})
 ok(d["empenho"] == "2026NE000123" and d["pago_em"], "admin registra empenho, nota fiscal e pagamento")
 
 s, d = chamar("post", "/api/conta/pedidos", T, json={**base_pedido, "plano": "monitoramento", "forma": "mercado_pago", "periodicidade": "anual",
@@ -276,13 +306,22 @@ ok(doe["classificacao"] == "pagamento" and doe["emenda_id"] == E["id"] and doe["
    "achado do DOE-SP classificado, vinculado à emenda e com link da publicação")
 s, d = chamar("get", "/api/fontes", T)
 ok(d["doe_sp"] and d["tce_sp"] and d["teste"], "painel de fontes mostra DOE-SP e TCE-SP ativos")
-# ---------------------------------------------------------------- TSE
+# ---------------------------------------------------------------- TSE (Portal de Dados Abertos)
+s, d = chamar("get", "/api/tse/eleitos?cargo=deputado_federal&uf=SP&q=fulano", T)
+ok(s == 409 and d["codigo"] == "tse_nao_importado", "TSE: avisa quando a base ainda não foi importada")
+with app.app_context():
+    from services import tse as _tse
+    ok(_tse.importar(2022) == 1 and _tse.importar(2024) == 1, "TSE: importa só eleitos de cargos legislativos (sem prefeito, sem não eleitos, sem o arquivo BRASIL)")
+    from models import EleitoTSE as _E
+    ok(not any(hasattr(_E, c) for c in ("cpf", "email", "cor_raca")), "TSE: tabela não tem colunas de CPF, e-mail ou cor/raça")
+s, d = chamar("get", "/api/admin/tse", TA)
+ok({r["ano"]: r["status"] for r in d["importacoes"]} == {2022: "ok", 2024: "ok"}, "TSE: situação da importação no admin")
 s, d = chamar("get", "/api/tse/eleitos?cargo=deputado_federal&uf=SP&q=fulano", T)
 ok(s == 200 and len(d) == 1 and d[0]["partido"] == "PDT" and d[0]["numero"] == "1234" and d[0]["casa"] == "Câmara dos Deputados",
    "TSE: só eleitos, com nome, partido, número e Casa")
 ok("cpf" not in str(d) and "NAO-PODE-SAIR" not in str(d), "TSE: CPF e cor/raça não saem do servidor (minimização)")
 s, d = chamar("get", "/api/tse/eleitos?cargo=vereador&uf=SP&municipio=Juquitiba", T)
-ok(len(d) == 1 and d[0]["nome_urna"] == "ADELIA DO JUSTINO", "TSE: vereador pelo código TSE do município (≠ IBGE)")
+ok(len(d) == 1 and d[0]["nome_urna"] == "ADÉLIA DO JUSTINO" and d[0]["nome_completo"] == "Adélia de Souza", "TSE: vereador por município, acentos preservados")
 s, d = chamar("put", f"/api/gabinetes/{G}", T, json={"partido": "PDT", "numero_urna": "1234", "foto_url": "https://divulgacandcontas.tse.jus.br/foto.jpg", "tse_ano": 2022})
 ok(d["partido"] == "PDT" and d["tse_ano"] == 2022, "gabinete preenchido com dados do TSE")
 
@@ -334,23 +373,53 @@ s, d = chamar("post", f"/api/gabinetes/{G}/resumos", T)
 ok(s == 201 and "menções" in d["texto"] and d["numeros"]["total"] >= 2, "pauta do dia gerada (texto)")
 
 # ---------------------------------------------------------------- Admin
-s, d = chamar("get", "/api/admin/crm", T)
-ok(d["mrr"] == 9900 and d["contas"][0]["etapa"] == "assinante", "admin: CRM com MRR e etapa")
-s, d = chamar("get", "/api/admin/funil", T)
-ok(d["etapas"][0]["contas"] == 1 and d["etapas"][-1]["contas"] == 1, "admin: funil até a liberação")
-s, d = chamar("get", "/api/admin/receitas", T)
+s, d = chamar("get", "/api/admin/crm", TA)
+cli = [x for x in d["contas"] if x["id"] == 1][0]
+adm = [x for x in d["contas"] if x["email"] == "admin@teste.br"][0]
+ok(d["mrr"] == 9900 and cli["etapa"] == "assinante" and adm["etapa"] == "admin", "admin: CRM com MRR (sem a conta do admin) e etapas")
+s, d = chamar("get", "/api/admin/funil", TA)
+ok(d["etapas"][0]["contas"] >= 2 and d["etapas"][-1]["contas"] == 1, "admin: funil até a liberação")
+s, d = chamar("get", "/api/admin/receitas", TA)
 ok(d["recebido"] > 0, "admin: receitas")
-s, d = chamar("get", "/api/admin/planos/margem", T)
+s, d = chamar("get", "/api/admin/planos/margem", TA)
 ok(any(p["plano"] == "monitoramento" and p["contas"] == 1 for p in d["planos"]), "admin: planos e margem")
-s, d = chamar("post", "/api/admin/prospeccao/importar", T, json={"cargo": "deputado_federal", "uf": "SP"})
+s, d = chamar("post", "/api/admin/prospeccao/importar", TA, json={"cargo": "deputado_federal", "uf": "SP"})
 ok(d["novos"] == 1, "admin: prospecção importa eleitos do TSE")
 chamar("post", "/api/logs/navegador", json={"mensagem": "TypeError: x is undefined", "tela": "#/emendas"})
-s, d = chamar("get", "/api/admin/logs", T)
+s, d = chamar("get", "/api/admin/logs", TA)
 ok(any(l["origem"] == "navegador" for l in d["logs"]), "admin: logs recebem erros do navegador")
-s, d = chamar("get", "/api/admin/armazenamento", T)
+s, d = chamar("get", "/api/admin/armazenamento", TA)
 ok(any(t["tabela"] == "Menções (clipping)" and t["registros"] >= 2 for t in d["tabelas"]), "admin: armazenamento")
-r = c.get("/api/admin/notas.csv", headers={"Authorization": "Bearer " + T})
+r = c.get("/api/admin/notas.csv", headers={"Authorization": "Bearer " + TA})
 ok(r.status_code == 200 and b"2026NE000123" in r.data, "admin: exportação das notas fiscais")
+
+# ---------------------------------------------------------------- Clientes: teste, suspensão e exclusão
+s, d = chamar("post", "/api/auth/registro", json={"nome": "Outro Gabinete", "email": "outro@camara.leg.br", "senha": "12345678", "gabinete": "Gab. Teste"})
+T3 = d["token"]
+s, d = chamar("get", "/api/conta", T3)
+C3 = d["conta"]["id"]
+s, d = chamar("patch", f"/api/admin/contas/{C3}", TA, json={"estender_trial_dias": 7, "trial_plano": "monitoramento"})
+ok(d["etapa"] == "em_teste" and d["plano"] == "monitoramento" and d["receita_mes"] == 0, "admin concede 7 dias de teste (não conta como receita)")
+s, d = chamar("get", "/api/conta", T3)
+ok(d["plano"]["codigo"] == "monitoramento" and d["plano"]["em_teste"], "cliente vê o plano de teste")
+chamar("patch", f"/api/admin/contas/{C3}", TA, json={"bloqueada": True})
+s, d = chamar("get", "/api/conta", T3)
+ok(s == 403 and d["codigo"] == "conta_suspensa", "conta suspensa perde o acesso")
+s, d = chamar("patch", f"/api/admin/contas/{d and C3}", TA, json={"bloqueada": False})
+s, d = chamar("get", "/api/conta", T3)
+ok(s == 200, "acesso reativado")
+s, d = chamar("delete", f"/api/admin/contas/{C3}", TA, json={"confirmacao": "nome errado"})
+ok(s == 400, "exclusão exige digitar o nome da conta")
+s, d = chamar("delete", f"/api/admin/contas/{C3}", TA, json={"confirmacao": "Gab. Teste"})
+ok(s == 200, "admin exclui a conta e os dados dela")
+s, d = chamar("get", "/api/conta", T3)
+ok(s == 401, "usuário da conta excluída não entra mais")
+s, d = chamar("get", "/api/admin/crm", TA)
+adm_id = [x for x in d["contas"] if x["email"] == "admin@teste.br"][0]["id"]
+s, d = chamar("delete", f"/api/admin/contas/{adm_id}", TA, json={"confirmacao": "Daniel Admin"})
+ok(s == 400, "admin não exclui a própria conta")
+s, d = chamar("get", "/api/admin/historico", TA)
+ok(any(h["acao"] == "conta excluída" for h in d), "exclusão registrada no histórico geral")
 
 with app.app_context():
     from jobs.rotina_diaria import rodar  # noqa: F401 — importa sem erro

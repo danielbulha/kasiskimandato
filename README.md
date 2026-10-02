@@ -24,7 +24,7 @@ Backend e banco **próprios** no Render — isolados do Kasiski Licitações.
 
 | Módulo | O que entrega | Fontes (conferidas em chamada real quando indicado ✓) |
 |---|---|---|
-| Cadastro pelo TSE | Nome civil, nome de urna, partido, número, cargo, Casa, UF, município e foto dos eleitos | DivulgaCandContas ✓ (sem CPF, raça ou bens — minimização) |
+| Cadastro pelo TSE | Nome civil, nome de urna, partido, número, cargo, Casa, UF e município dos eleitos | Portal de Dados Abertos do TSE ✓ (`consulta_cand_{ano}.zip`, importado uma vez por eleição; sem CPF, e-mail ou cor/raça) |
 | Emendas | Ciclo da verba com linha do tempo e fonte | Portal da Transparência, Transferegov.br especiais ✓, TCE-SP, DOE-SP ✓, Querido Diário |
 | Gestor de Emendas | Risco de perder o recurso (impedimento, prazos, fim de exercício, restos a pagar, plano de ação) e página pública de prestação de contas por município | Regras objetivas, sem IA |
 | Copiloto Legislativo | Pesquisa, texto integral, resumo em tópicos, riscos de inconstitucionalidade (para revisão), comparação com leis de outros entes, verificação cruzada | Câmara ✓, Senado ✓, SAPL da Casa, Querido Diário (leis municipais), DOE-SP |
@@ -32,6 +32,10 @@ Backend e banco **próprios** no Render — isolados do Kasiski Licitações.
 | Clipping | Menções com sentimento, índice de 14 dias, crise, pauta do dia (texto e MP3) | Google Notícias RSS ✓, RSS de veículos regionais, diários, social listening |
 | Alertas | Crise no WhatsApp (modelo aprovado pela Meta) e por e-mail; resumo diário | WhatsApp Business Cloud API |
 | Administração | Clientes, Funil, Receitas, Notas fiscais e pedidos, Planos e margem, Prospecção (eleitos do TSE), Logs de erros (servidor, tarefas e navegador), Armazenamento | — |
+
+**Base do TSE:** importe uma vez por eleição em Administração → Prospecção → Base do TSE (2018, 2022 e 2024; 2026 quando
+o resultado sair), ou pelo Shell do Render: `python jobs/importar_tse.py 2018 2022 2024`. O DivulgaCandContas foi descartado:
+responde ao navegador, mas devolve 403 para servidores.
 
 Rotinas no Render: `mandato-rotina` (diária, 06h30) e `mandato-clipping` (de hora em hora).
 
@@ -42,7 +46,9 @@ Rotinas no Render: `mandato-rotina` (diária, 06h30) e `mandato-clipping` (de ho
    e marca a declaração; ficam registrados nome, data/hora e IP. Também é possível recusar.
 3. **Faturamento:** a aprovação libera o plano; a fatura vence em `FATURA_DIAS` e o admin registra empenho, NFS-e e pagamento.
    **Mercado Pago:** libera quando houver aprovação E pagamento confirmado pela API do Mercado Pago, em qualquer ordem.
-4. Não existe liberação manual pelo admin — a trilha de aprovação oficial é sempre exigida.
+4. O admin pode ajustar manualmente (plano, validade, preço contratado, teste, suspensão, exclusão) em Administração →
+   Clientes; cada ajuste fica no histórico da conta com o e-mail de quem fez. Contas de quem está em `ADMIN_EMAILS`
+   têm acesso total (Institucional), sem limites.
 
 ## Versão de teste
 
@@ -62,7 +68,7 @@ python app.py                                             # http://127.0.0.1:500
 cd frontend && python -m http.server 8090                 # http://localhost:8090
 ```
 Sem chaves de IA, roda em modo demonstração (como o Kasiski). Teste de ponta a ponta, sem rede:
-`cd backend && python testes/teste_ponta_a_ponta.py` (75 verificações).
+`cd backend && python testes/teste_ponta_a_ponta.py` (91 verificações).
 
 ## Deploy
 

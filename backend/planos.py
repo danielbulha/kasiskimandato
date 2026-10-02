@@ -54,13 +54,40 @@ PAGOS = ("essencial", "legislativo", "monitoramento", "completo", "institucional
 LEGADO = {"municipal": "essencial", "estadual": "legislativo", "federal": "monitoramento"}
 
 
+def conta_de_admin(conta):
+    """Conta de quem está em ADMIN_EMAILS: acesso total, sem limites (como no Kasiski Licitações)."""
+    from flask import current_app
+    admins = current_app.config["ADMIN_EMAILS"]
+    return bool(admins) and any(u.email.lower() in admins for u in conta.usuarios)
+
+
 def plano_atual(conta):
-    """Plano pago vale até pago_ate; depois disso a conta volta ao Free (dados preservados)."""
+    """Admin → Institucional. Plano pago vale até pago_ate (vazio = sem vencimento). Sem plano pago válido,
+    vale o teste concedido pelo admin até trial_fim; depois, Free (dados preservados)."""
+    if conta_de_admin(conta):
+        return "institucional"
     cod = LEGADO.get(conta.plano, conta.plano)
     cod = cod if cod in PLANOS else "free"
     if cod in PAGOS and conta.pago_ate and conta.pago_ate < date.today():
         cod = "free"
+    if cod == "free" and conta.trial_plano in PLANOS and conta.trial_fim and conta.trial_fim >= date.today():
+        cod = conta.trial_plano
     return cod
+
+
+def em_teste(conta):
+    return (not conta_de_admin(conta) and conta.trial_plano in PLANOS and conta.trial_fim and conta.trial_fim >= date.today()
+            and plano_atual(conta) == conta.trial_plano and LEGADO.get(conta.plano, conta.plano) != conta.trial_plano)
+
+
+def preco_mensal(conta):
+    """Receita mensal da conta: preço contratado (anual ÷ 12) ou tabela; contas em teste ou de admin não contam."""
+    cod = plano_atual(conta)
+    if cod not in PAGOS or em_teste(conta) or conta_de_admin(conta):
+        return 0
+    if conta.preco_contratado:
+        return round(conta.preco_contratado / (12 if conta.ciclo == "anual" else 1), 2)
+    return PLANOS[cod]["preco"] or 0
 
 
 def _inicio_mes():
@@ -86,7 +113,9 @@ def uso(conta):
 def resumo(conta):
     cod = plano_atual(conta)
     p = dict(PLANOS[cod])
-    p.update({"codigo": cod, "uso": uso(conta), "pago_ate": conta.pago_ate.isoformat() if conta.pago_ate else None})
+    p.update({"codigo": cod, "uso": uso(conta), "pago_ate": conta.pago_ate.isoformat() if conta.pago_ate else None,
+              "admin": conta_de_admin(conta), "em_teste": em_teste(conta),
+              "trial_fim": conta.trial_fim.isoformat() if em_teste(conta) else None})
     return p
 
 

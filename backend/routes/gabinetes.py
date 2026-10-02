@@ -103,6 +103,9 @@ def editar(gid):
 def excluir(gid):
     gab = gabinete_da_conta(gid)
     from models import AchadoDiario, Comunicado, Emenda, Minuta, MonitorDiario
+    from models import Demanda, TarefaGabinete, CompromissoGabinete, EventoOperacional
+    for modelo in (EventoOperacional, TarefaGabinete, CompromissoGabinete, Demanda):
+        modelo.query.filter_by(gabinete_id=gab.id).delete()
     for modelo in (Comunicado, AchadoDiario, MonitorDiario, Minuta):
         modelo.query.filter_by(gabinete_id=gab.id).delete()
     for e in Emenda.query.filter_by(gabinete_id=gab.id).all():
@@ -169,8 +172,7 @@ def cobertura():
 def tse_eleitos():
     from services import tse
     cargo, uf = request.args.get("cargo"), request.args.get("uf")
-    lista = tse.eleitos(cargo, uf, request.args.get("municipio"), request.args.get("q"),
-                        so_eleitos=request.args.get("todos") != "1")
+    lista = tse.eleitos(cargo, uf, request.args.get("municipio"), request.args.get("q"))
     for c in lista:
         c["casa"] = tse.casa_sugerida(cargo, (uf or "").upper(), c.get("municipio"))
     return jsonify(lista[:60])

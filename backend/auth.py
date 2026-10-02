@@ -55,6 +55,8 @@ def login_requerido(f):
         if u.verificado is False and verificacao.exigida():   # None = conta antiga: tratada como verificada
             raise ErroAPI("Confirme seu e-mail para continuar.", 401, "email_nao_verificado")
         g.usuario, g.conta, g.admin = u, u.conta, eh_admin(u)
+        if u.conta.bloqueada and not g.admin:
+            raise ErroAPI("Acesso suspenso. Fale com o suporte do Kasiski: contato@kasiski.com.br", 403, "conta_suspensa")
         agora = datetime.utcnow()
         if not u.ultimo_acesso or agora - u.ultimo_acesso > timedelta(hours=1):
             u.ultimo_acesso = agora

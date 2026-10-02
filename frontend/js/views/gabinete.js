@@ -17,7 +17,7 @@ V.gabinete = async (el) => {
         <div class="campo"><label for="t-q">Nome</label><input id="t-q" placeholder="Nome de urna ou civil"></div></div>
       <button class="botao secundario" id="t-buscar">${icone("buscar")} Buscar no TSE</button>
       <div id="t-res" class="tse-resultados"></div>
-      <p class="fraco">Fonte: DivulgaCandContas (TSE). Usamos só nome, partido, número, cargo, local e foto — nada de CPF ou outros dados pessoais.</p></section>
+      <p class="fraco">Fonte: Portal de Dados Abertos do TSE. Usamos só nome, partido, número, cargo e local — nada de CPF ou outros dados pessoais.</p></section>
     <section class="bloco"><h2>Parlamentar</h2>
       <form id="form-gab" novalidate>
         <input type="hidden" name="partido" value="${esc(g.partido || "")}"><input type="hidden" name="numero_urna" value="${esc(g.numero_urna || "")}">

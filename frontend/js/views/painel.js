@@ -16,6 +16,9 @@ V.painel = async (el) => {
       peças institucionais estão bloqueadas na Central de Comunicação (Lei 9.504/97, art. 73, VI, b).</span></div>` : ""}
     ${pendencias.length ? `<div class="aviso info">${pendencias.join("<br>")}</div>` : ""}
     <div class="acoes-rapidas">
+      <a href="#/demandas" class="acao-rapida"><span class="icone-caixa">Demandas</span><span>Protocolos</span></a>
+      <a href="#/tarefas" class="acao-rapida"><span class="icone-caixa">Tarefas</span><span>Kanban</span></a>
+      <a href="#/agenda" class="acao-rapida"><span class="icone-caixa">Agenda</span><span>Compromissos</span></a>
       <a href="#" class="acao-rapida" data-acao="nova-emenda"><span class="icone-caixa">${icone("emendas")}</span><span>Cadastrar emenda</span></a>
       <a href="#/legislativo?nova=1" class="acao-rapida"><span class="icone-caixa">${icone("legislativo")}</span><span>Redigir proposição</span></a>
       <a href="#/comunicacao?nova=1" class="acao-rapida"><span class="icone-caixa">${icone("comunicacao")}</span><span>Gerar comunicado</span></a>

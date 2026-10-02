@@ -1,12 +1,14 @@
 // Roteador, layout com navegação pelos pilares do mandato e telas de entrada/cadastro/verificação.
 const ROTAS = [
-  [/^#\/painel$/, "painel"], [/^#\/emendas$/, "emendas"], [/^#\/emendas\/(\d+)$/, "emenda"], [/^#\/diarios$/, "diarios"],
+  [/^#\/painel$/, "painel"], [/^#\/inteligencia$/, "inteligencia"], [/^#\/demandas$/, "demandas"], [/^#\/tarefas$/, "tarefas"], [/^#\/agenda$/, "agenda"], [/^#\/emendas$/, "emendas"], [/^#\/emendas\/(\d+)$/, "emenda"], [/^#\/diarios$/, "diarios"],
   [/^#\/legislativo$/, "legislativo"], [/^#\/legislativo\/(\d+)$/, "minuta"], [/^#\/comunicacao$/, "comunicacao"],
   [/^#\/gabinete$/, "gabinete"], [/^#\/conta$/, "conta"], [/^#\/admin$/, "admin"], [/^#\/repasses-sp$/, "repassesSP"],
   [/^#\/copiloto$/, "copiloto"], [/^#\/analises\/(\d+)$/, "analise"], [/^#\/clipping$/, "clipping"],
 ];
 
 const NAV = [
+  ["Inteligência v8", [["#/inteligencia", "Central de inteligência", "buscar"]]],
+  ["Gestão do gabinete", [["#/demandas", "Demandas e protocolos", "gabinete"], ["#/tarefas", "Tarefas e Kanban", "painel"], ["#/agenda", "Agenda", "diarios"]]],
   ["Verbas e orçamento", [["#/emendas", "Emendas", "emendas"], ["#/diarios", "Diários oficiais", "diarios"],
     ["#/repasses-sp", "Repasses do Estado (SP)", "mapa", () => ehSP()]]],
   ["Produção legislativa", [["#/copiloto", "Copiloto Legislativo", "buscar"], ["#/legislativo", "Minutas legislativas", "legislativo"]]],
@@ -30,7 +32,9 @@ function layout() {
   const link = ([h, t, ic], badge) => `<a href="${h}" class="${rota === h ? "ativo" : ""}"><span class="rotulo">${icone(ic, 17)}${esc(t)}</span>${badge ? `<span class="contador">${badge}</span>` : ""}</a>`;
   const aviso = [];
   if (S.demo) aviso.push(`<div class="faixa-aviso"><span><b>Modo demonstração.</b> As respostas de IA são exemplos. Configure as chaves de IA no servidor para textos reais.</span></div>`);
-  if (S.plano?.codigo === "free") aviso.push(`<div class="faixa-aviso"><span>Você está no <b>Free</b>: rastreio manual, ${S.plano.minutas} minutas e ${S.plano.comunicados} comunicados por mês. A sincronização automática e os rascunhos automáticos estão nos planos de mandato.</span><a href="#/conta">Ver planos</a></div>`);
+  if (S.plano?.admin) aviso.push(`<div class="faixa-aviso"><span><b>Administrador:</b> sua conta tem acesso total a todos os módulos, sem limites.</span><a href="#/admin">Administração</a></div>`);
+  else if (S.plano?.em_teste) aviso.push(`<div class="faixa-aviso"><span>Você está testando o <b>${esc(S.plano.nome)}</b> até ${fmt.data(S.plano.trial_fim)}.</span><a href="#/conta">Contratar</a></div>`);
+  else if (S.plano?.codigo === "free") aviso.push(`<div class="faixa-aviso"><span>Você está no <b>Free</b>: rastreio manual, ${S.plano.minutas} minutas e ${S.plano.comunicados} comunicados por mês. A sincronização automática e os rascunhos automáticos estão nos planos de mandato.</span><a href="#/conta">Ver planos</a></div>`);
   else if (S.plano?.pago_ate && fmt.dias(S.plano.pago_ate) <= 10) aviso.push(`<div class="faixa-aviso"><span>Seu plano vale até ${fmt.data(S.plano.pago_ate)} (${fmt.prazo(S.plano.pago_ate)}).</span><a href="#/conta">Renovar</a></div>`);
   return `${faixaTeste()}
   <div class="topo-movel"><a class="marca" href="#/painel">${simboloMarca(28)}<strong>Kasiski Mandato</strong></a>

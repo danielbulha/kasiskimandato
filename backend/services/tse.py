@@ -1,108 +1,150 @@
-"""Dados públicos de candidaturas do TSE (DivulgaCandContas) para preencher o cadastro do gabinete e a prospecção.
+"""Eleitos do TSE para preencher o cadastro do gabinete e a prospecção.
 
-Endpoints conferidos em chamada real em 30/09/2026 (base https://divulgacandcontas.tse.jus.br/divulga/rest/v1):
-  /eleicao/ordinarias                                         [{id, ano, nomeEleicao, tipoAbrangencia (M/F)}]
-  /eleicao/buscar/{UF}/{idEleicao}/municipios                 {municipios: [{codigo (TSE), nome}]}
-  /candidatura/listar/{ano}/{UE}/{idEleicao}/{cargo}/candidatos  {candidatos: [{id, nomeUrna, nomeCompleto, numero,
-                                                                  partido{sigla}, descricaoTotalizacao, fotoUrl...}]}
-  UE = código TSE do município (eleição municipal) ou sigla da UF (eleição geral). O código TSE NÃO é o do IBGE
-  (Juquitiba: 66257 no TSE, 3525508 no IBGE) — casamos pelo nome.
+Fonte: Portal de Dados Abertos do TSE — https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_{ano}.zip
+(endereço conferido no catálogo oficial em 30/09/2026). O zip traz um CSV por UF (separador ";", latin-1).
 
-Minimização (LGPD): a resposta traz CPF, cor/raça, bens, gastos de campanha etc. Aqui só saem os dados de
-identificação pública do mandato (nome, nome de urna, partido, número, cargo, local, foto e resultado).
+Por que não o DivulgaCandContas: ele responde ao navegador, mas devolve 403 para servidores (Render). Não contornamos o
+bloqueio; usamos a base que o TSE publica exatamente para consumo automatizado. Como resultado de eleição não muda,
+a base é IMPORTADA uma vez por eleição (Administração → Prospecção, ou `python jobs/importar_tse.py 2018 2022 2024`).
+
+Minimização (LGPD): o CSV traz CPF, e-mail, data de nascimento, cor/raça, grau de instrução etc. Só lemos nome, nome
+de urna, partido, número, cargo, UF, município e resultado. O resto não é lido nem gravado.
 """
+import csv
+import io
+import logging
+import os
 import re
-import time
+import tempfile
+import threading
+import zipfile
+from datetime import datetime
 
 import requests
 from flask import current_app
 
-from extensions import ErroAPI
-from services.dados_publicos import UA, _cache, sem_acento
+from extensions import ErroAPI, db
+from models import EleitoTSE, ImportacaoTSE
+from services.dados_publicos import UA, sem_acento
 
-BASE = "https://divulgacandcontas.tse.jus.br/divulga/rest/v1"
-# cargo do Kasiski → (código TSE, tipo de eleição)
-CARGOS_TSE = {"vereador": (13, "M"), "deputado_estadual": (7, "F"), "deputado_distrital": (8, "F"),
-              "deputado_federal": (6, "F"), "senador": (5, "F")}
-ELEITO = re.compile(r"^eleito", re.I)   # "Eleito", "Eleito por QP", "Eleito por média" (não pega "Não eleito")
+log = logging.getLogger(__name__)
+URL = "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand/consulta_cand_{ano}.zip"
+# código TSE do cargo → (código do Kasiski, tipo de eleição)
+CARGOS = {"13": ("vereador", "M"), "7": ("deputado_estadual", "F"), "8": ("deputado_distrital", "F"),
+          "6": ("deputado_federal", "F"), "5": ("senador", "F")}
+TIPO_DO_CARGO = {k: t for _, (k, t) in CARGOS.items()}
+ELEITO = re.compile(r"^\s*ELEITO", re.I)          # ELEITO, ELEITO POR QP, ELEITO POR MÉDIA (não pega "NÃO ELEITO")
+ANOS_GERAIS, ANOS_MUNICIPAIS = (2018, 2022, 2026, 2030), (2024, 2028, 2032)
 
 
-def _get(caminho, timeout=40):
+def _titulo(t):
+    t = (t or "").strip().lower()
+    t = re.sub(r"(^|\s)(\S)", lambda m: m.group(1) + m.group(2).upper(), t)
+    return re.sub(r"\b(De|Da|Do|Das|Dos|E)\b", lambda m: m.group(1).lower(), t)
+
+
+def importar(ano, ufs=None):
+    """Baixa o zip oficial do ano e grava só os eleitos dos cargos legislativos. Idempotente (substitui o ano)."""
+    ano = int(ano)
+    reg = ImportacaoTSE.query.filter_by(ano=ano).first() or ImportacaoTSE(ano=ano)
+    reg.status, reg.erro, reg.iniciado_em, reg.terminado_em = "rodando", None, datetime.utcnow(), None
+    db.session.add(reg)
+    db.session.commit()
+    caminho = None
     try:
-        r = requests.get(BASE + caminho, headers={**UA, "Accept": "application/json"}, timeout=timeout)
-    except requests.RequestException as e:
-        raise ErroAPI(f"TSE indisponível agora ({e.__class__.__name__}). Tente de novo em instantes.", 502)
-    if r.status_code >= 400:
-        raise ErroAPI(f"TSE respondeu {r.status_code}.", 502)
-    try:
-        return r.json()
-    except ValueError:
-        raise ErroAPI("TSE devolveu um formato inesperado.", 502)
+        with requests.get(URL.format(ano=ano), headers=UA, stream=True, timeout=(30, 600)) as r:
+            if r.status_code >= 400:
+                raise ErroAPI(f"Portal de Dados Abertos do TSE respondeu {r.status_code} para {ano}.", 502)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                for bloco in r.iter_content(1024 * 1024):
+                    tmp.write(bloco)
+                caminho = tmp.name
+        EleitoTSE.query.filter_by(ano=ano).delete()
+        total, vistos = 0, set()
+        with zipfile.ZipFile(caminho) as z:
+            for nome in z.namelist():
+                m = re.search(r"_([A-Z]{2})\.csv$", nome)
+                if not m or (ufs and m.group(1) not in ufs):
+                    continue   # pula o arquivo BRASIL (duplicado) e o que não for CSV por UF
+                with z.open(nome) as f:
+                    leitor = csv.DictReader(io.TextIOWrapper(f, encoding="latin-1", newline=""), delimiter=";")
+                    lote = []
+                    for lin in leitor:
+                        cargo = CARGOS.get((lin.get("CD_CARGO") or "").strip())
+                        if not cargo or not ELEITO.match(lin.get("DS_SIT_TOT_TURNO") or ""):
+                            continue
+                        sq = (lin.get("SQ_CANDIDATO") or "").strip()
+                        if sq in vistos:
+                            continue
+                        vistos.add(sq)
+                        urna, civil = (lin.get("NM_URNA_CANDIDATO") or "").strip(), (lin.get("NM_CANDIDATO") or "").strip()
+                        lote.append(EleitoTSE(ano=ano, uf=(lin.get("SG_UF") or "").strip(), cargo=cargo[0], sq_candidato=sq,
+                                              municipio=_titulo(lin.get("NM_UE")) if cargo[1] == "M" else None,
+                                              numero=(lin.get("NR_CANDIDATO") or "").strip(), nome_urna=urna,
+                                              nome_completo=_titulo(civil), nome_busca=sem_acento(f"{urna} {civil}"),
+                                              partido=(lin.get("SG_PARTIDO") or "").strip(),
+                                              resultado=(lin.get("DS_SIT_TOT_TURNO") or "").strip().capitalize()))
+                    db.session.bulk_save_objects(lote)
+                    db.session.commit()
+                    total += len(lote)
+        reg.status, reg.eleitos, reg.terminado_em = "ok", total, datetime.utcnow()
+        db.session.commit()
+        return total
+    except Exception as e:  # noqa: BLE001 — o status fica visível no admin
+        db.session.rollback()
+        reg = ImportacaoTSE.query.filter_by(ano=ano).first()
+        reg.status, reg.erro, reg.terminado_em = "erro", str(getattr(e, "mensagem", e))[:500], datetime.utcnow()
+        db.session.commit()
+        log.exception("Importação do TSE %s falhou", ano)
+        raise
+    finally:
+        if caminho and os.path.exists(caminho):
+            os.remove(caminho)
 
 
-def eleicoes():
-    """Eleições ordinárias, da mais recente para a mais antiga."""
-    def buscar():
-        d = _get("/eleicao/ordinarias") or []
-        return sorted([{"id": e.get("id"), "ano": e.get("ano"), "nome": e.get("nomeEleicao"), "tipo": e.get("tipoAbrangencia")}
-                       for e in d if e.get("id") and e.get("ano")], key=lambda e: -e["ano"])
-    return _cache("tse:eleicoes", 3600 * 6, buscar)
+def importar_em_segundo_plano(ano):
+    app = current_app._get_current_object()
+
+    def tarefa():
+        with app.app_context():
+            try:
+                importar(ano)
+            except Exception:  # noqa: BLE001
+                pass
+    threading.Thread(target=tarefa, daemon=True).start()
 
 
-def eleicoes_do_cargo(cargo):
-    """Eleições que valem para o cargo hoje. Senado: mandato de 8 anos → as duas últimas gerais."""
-    _, tipo = CARGOS_TSE[cargo]
-    lista = [e for e in eleicoes() if e["tipo"] == tipo and e["ano"] <= time.localtime().tm_year]
-    return lista[:2] if cargo == "senador" else lista[:1]
+def anos_do_cargo(cargo):
+    """Anos importados que valem hoje: a última eleição do tipo; senador, as duas últimas gerais (mandato de 8 anos)."""
+    tipo = TIPO_DO_CARGO[cargo]
+    validos = ANOS_MUNICIPAIS if tipo == "M" else ANOS_GERAIS
+    importados = sorted({r.ano for r in ImportacaoTSE.query.filter_by(status="ok").all() if r.ano in validos}, reverse=True)
+    return importados[:2] if cargo == "senador" else importados[:1]
 
 
-def municipio_tse(uf, nome, id_eleicao):
-    d = _cache(f"tse:mun:{uf}:{id_eleicao}", 86400 * 7, lambda: _get(f"/eleicao/buscar/{uf.upper()}/{id_eleicao}/municipios") or {})
-    alvo = sem_acento(nome)
-    for m in d.get("municipios") or []:
-        if sem_acento(m.get("nome")) == alvo:
-            return str(m.get("codigo"))
-    return None
-
-
-def _publico(c, cargo, ano, uf, municipio):
-    """Só dados de identificação pública do mandato."""
-    return {"tse_candidato_id": str(c.get("id")), "nome_urna": (c.get("nomeUrna") or "").strip(),
-            "nome_completo": (c.get("nomeCompleto") or "").strip(), "numero": str(c.get("numero") or ""),
-            "partido": ((c.get("partido") or {}).get("sigla") or "").strip(), "cargo": cargo, "ano": ano, "uf": uf,
-            "municipio": municipio, "resultado": c.get("descricaoTotalizacao"), "foto_url": c.get("fotoUrl")}
-
-
-def eleitos(cargo, uf, municipio=None, busca=None, so_eleitos=True):
-    if cargo not in CARGOS_TSE:
+def eleitos(cargo, uf, municipio=None, busca=None):
+    if cargo not in TIPO_DO_CARGO:
         raise ErroAPI("Cargo inválido.")
     uf = (uf or "").upper()
     if not re.fullmatch(r"[A-Z]{2}", uf):
         raise ErroAPI("Informe a UF.")
-    codigo, tipo = CARGOS_TSE[cargo]
-    saida = []
-    for e in eleicoes_do_cargo(cargo):
-        if tipo == "M":
-            if not municipio:
-                raise ErroAPI("Para vereador, informe o município.")
-            ue = municipio_tse(uf, municipio, e["id"])
-            if not ue:
-                raise ErroAPI(f"Município {municipio}/{uf} não encontrado no TSE.")
-        else:
-            ue = uf
-        d = _cache(f"tse:cand:{e['ano']}:{ue}:{e['id']}:{codigo}", 3600 * 12,
-                   lambda: _get(f"/candidatura/listar/{e['ano']}/{ue}/{e['id']}/{codigo}/candidatos", timeout=60) or {})
-        for c in d.get("candidatos") or []:
-            if so_eleitos and not ELEITO.match(c.get("descricaoTotalizacao") or ""):
-                continue
-            saida.append(_publico(c, cargo, e["ano"], uf, municipio if tipo == "M" else None))
+    anos = anos_do_cargo(cargo)
+    if not anos:
+        raise ErroAPI("A base de eleitos do TSE ainda não foi importada para este cargo. Peça ao administrador: "
+                      "Administração → Prospecção → Base do TSE.", 409, "tse_nao_importado")
+    q = EleitoTSE.query.filter(EleitoTSE.cargo == cargo, EleitoTSE.uf == uf, EleitoTSE.ano.in_(anos))
+    if TIPO_DO_CARGO[cargo] == "M":
+        if not municipio:
+            raise ErroAPI("Para vereador, informe o município.")
+        q = q.filter(EleitoTSE.municipio == _titulo(municipio))
     if busca:
-        b = sem_acento(busca)
-        saida = [c for c in saida if b in sem_acento(c["nome_urna"]) or b in sem_acento(c["nome_completo"])]
-    return sorted(saida, key=lambda c: c["nome_urna"])
+        q = q.filter(EleitoTSE.nome_busca.contains(sem_acento(busca)))
+    return [{"tse_candidato_id": e.sq_candidato, "nome_urna": e.nome_urna, "nome_completo": e.nome_completo, "numero": e.numero,
+             "partido": e.partido, "cargo": e.cargo, "ano": e.ano, "uf": e.uf, "municipio": e.municipio, "resultado": e.resultado,
+             "foto_url": None} for e in q.order_by(EleitoTSE.nome_urna).limit(200).all()]
 
 
-CASAS = {"vereador": "Câmara Municipal de {municipio}", "deputado_estadual": "Assembleia Legislativa do Estado ({uf})",
+CASAS = {"vereador": "Câmara Municipal de {municipio}", "deputado_estadual": "Assembleia Legislativa ({uf})",
          "deputado_distrital": "Câmara Legislativa do Distrito Federal", "deputado_federal": "Câmara dos Deputados",
          "senador": "Senado Federal"}
 ASSEMBLEIAS = {"SP": "Assembleia Legislativa do Estado de São Paulo", "RJ": "Assembleia Legislativa do Estado do Rio de Janeiro",

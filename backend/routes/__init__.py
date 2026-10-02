@@ -6,8 +6,8 @@ from models import Emenda, Gabinete
 
 
 def registrar(app):
-    from routes import conta, gabinetes, emendas, diarios, legislativo, comunicacao, painel, admin, billing, sao_paulo, publico, clipping
-    for m in (conta, gabinetes, emendas, diarios, legislativo, comunicacao, painel, admin, billing, sao_paulo, publico, clipping):
+    from routes import conta, gabinetes, emendas, diarios, legislativo, comunicacao, painel, admin, billing, sao_paulo, publico, clipping, operacional, inteligencia8
+    for m in (conta, gabinetes, emendas, diarios, legislativo, comunicacao, painel, admin, billing, sao_paulo, publico, clipping, operacional, inteligencia8):
         app.register_blueprint(m.bp)
 
 

@@ -18,7 +18,15 @@ class Conta(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(200), nullable=False)
     plano = db.Column(db.String(30), default="free")
-    pago_ate = db.Column(db.Date)                        # liberado pelo admin após pagamento/empenho
+    pago_ate = db.Column(db.Date)                        # validade do plano pago
+    preco_contratado = db.Column(db.Float)               # preço negociado (vazio = preço de tabela)
+    ciclo = db.Column(db.String(10))                     # mensal / anual
+    trial_plano = db.Column(db.String(30))               # teste concedido pelo admin
+    trial_fim = db.Column(db.Date)
+    notas_crm = db.Column(db.Text)
+    etiqueta_crm = db.Column(db.String(30))
+    telefone = db.Column(db.String(30))
+    bloqueada = db.Column(db.Boolean, default=False)     # acesso suspenso pelo admin
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     usuarios = db.relationship("Usuario", backref="conta", lazy=True)
 
@@ -493,3 +501,134 @@ class AlertaEnviado(db.Model):
     texto = db.Column(db.Text)
     enviado = db.Column(db.Boolean, default=False)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EleitoTSE(db.Model):
+    """Eleitos importados do Portal de Dados Abertos do TSE (consulta_cand_{ano}.zip). Só identificação pública."""
+    id = db.Column(db.Integer, primary_key=True)
+    ano = db.Column(db.Integer, index=True)
+    uf = db.Column(db.String(2), index=True)
+    municipio = db.Column(db.String(120), index=True)              # NM_UE (eleição municipal); vazio na geral
+    cargo = db.Column(db.String(30), index=True)                   # código do Kasiski (vereador, deputado_federal...)
+    sq_candidato = db.Column(db.String(20), index=True)
+    numero = db.Column(db.String(10))
+    nome_urna = db.Column(db.String(200))
+    nome_completo = db.Column(db.String(200))
+    nome_busca = db.Column(db.String(400), index=True)             # sem acento, minúsculo (urna + civil)
+    partido = db.Column(db.String(30))
+    resultado = db.Column(db.String(60))
+
+
+class ImportacaoTSE(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    ano = db.Column(db.Integer, unique=True)
+    status = db.Column(db.String(20))                              # rodando / ok / erro
+    eleitos = db.Column(db.Integer, default=0)
+    erro = db.Column(db.String(500))
+    iniciado_em = db.Column(db.DateTime)
+    terminado_em = db.Column(db.DateTime)
+
+    def dict(self):
+        return {"ano": self.ano, "status": self.status, "eleitos": self.eleitos, "erro": self.erro,
+                "iniciado_em": self.iniciado_em.isoformat() if self.iniciado_em else None,
+                "terminado_em": self.terminado_em.isoformat() if self.terminado_em else None}
+
+
+class HistoricoConta(db.Model):
+    """Trilha das ações do admin sobre contas (mudança de plano, teste, exclusão...). Sem FK: sobrevive à exclusão."""
+    id = db.Column(db.Integer, primary_key=True)
+    conta_id = db.Column(db.Integer, index=True)
+    conta_nome = db.Column(db.String(200))
+    admin_email = db.Column(db.String(200))
+    acao = db.Column(db.String(60))
+    detalhe = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def dict(self):
+        return {"id": self.id, "conta_id": self.conta_id, "conta_nome": self.conta_nome, "admin_email": self.admin_email,
+                "acao": self.acao, "detalhe": self.detalhe, "criado_em": self.criado_em.isoformat() if self.criado_em else None}
+
+
+# v7: registros operacionais separados por gabinete.
+class Demanda(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    protocolo = db.Column(db.String(35), unique=True, nullable=False)
+    titulo = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text)
+    solicitante = db.Column(db.String(200))
+    contato = db.Column(db.String(200))
+    municipio = db.Column(db.String(120))
+    categoria = db.Column(db.String(80))
+    status = db.Column(db.String(35), default="recebida", nullable=False)
+    prioridade = db.Column(db.String(20), default="normal")
+    responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"))
+    prazo = db.Column(db.Date)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def dict(self):
+        return {k: (getattr(self,k).isoformat() if getattr(self,k) is not None and k in ("prazo","criado_em","atualizado_em") else getattr(self,k)) for k in ("id","gabinete_id","protocolo","titulo","descricao","solicitante","contato","municipio","categoria","status","prioridade","responsavel_id","prazo","criado_em","atualizado_em")}
+
+class TarefaGabinete(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    demanda_id = db.Column(db.Integer, db.ForeignKey("demanda.id"), index=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text)
+    status = db.Column(db.String(35), default="a_fazer", nullable=False)
+    prioridade = db.Column(db.String(20), default="normal")
+    responsavel_id = db.Column(db.Integer, db.ForeignKey("usuario.id"))
+    prazo = db.Column(db.Date)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    def dict(self):
+        return {k: (getattr(self,k).isoformat() if getattr(self,k) is not None and k in ("prazo","criado_em") else getattr(self,k)) for k in ("id","gabinete_id","demanda_id","titulo","descricao","status","prioridade","responsavel_id","prazo","criado_em")}
+
+class CompromissoGabinete(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    demanda_id = db.Column(db.Integer, db.ForeignKey("demanda.id"), index=True)
+    titulo = db.Column(db.String(200), nullable=False)
+    local = db.Column(db.String(200))
+    pauta = db.Column(db.Text)
+    inicio = db.Column(db.DateTime, nullable=False)
+    fim = db.Column(db.DateTime)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    def dict(self):
+        return {k: (getattr(self,k).isoformat() if getattr(self,k) is not None and k in ("inicio","fim","criado_em") else getattr(self,k)) for k in ("id","gabinete_id","demanda_id","titulo","local","pauta","inicio","fim","criado_em")}
+
+class EventoOperacional(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    entidade = db.Column(db.String(30), nullable=False)
+    entidade_id = db.Column(db.Integer, nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"))
+    descricao = db.Column(db.String(500), nullable=False)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    def dict(self):
+        return {"id":self.id,"entidade":self.entidade,"entidade_id":self.entidade_id,"descricao":self.descricao,"usuario_id":self.usuario_id,"criado_em":self.criado_em.isoformat()}
+
+
+class RadarProposicao(db.Model):
+    __tablename__ = "radar_proposicao"
+    id = db.Column(db.Integer, primary_key=True)
+    gabinete_id = db.Column(db.Integer, db.ForeignKey("gabinete.id"), nullable=False, index=True)
+    identificacao = db.Column(db.String(160), nullable=False)
+    fonte = db.Column(db.String(100), nullable=False, default="manual")
+    url = db.Column(db.String(900))
+    ementa = db.Column(db.Text)
+    situacao = db.Column(db.String(300))
+    texto = db.Column(db.Text)
+    versao = db.Column(db.Integer, nullable=False, default=1)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    def dict(self):
+        return {"id":self.id,"identificacao":self.identificacao,"fonte":self.fonte,"url":self.url,"ementa":self.ementa,"situacao":self.situacao,"texto":self.texto,"versao":self.versao,"atualizado_em":self.atualizado_em.isoformat() if self.atualizado_em else None}
+
+class RadarVersao(db.Model):
+    __tablename__ = "radar_versao"
+    id = db.Column(db.Integer, primary_key=True)
+    radar_id = db.Column(db.Integer, db.ForeignKey("radar_proposicao.id"), nullable=False, index=True)
+    versao = db.Column(db.Integer, nullable=False)
+    texto = db.Column(db.Text)
+    situacao = db.Column(db.String(300))
+    registrado_em = db.Column(db.DateTime, default=datetime.utcnow)
