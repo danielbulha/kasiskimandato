@@ -180,6 +180,15 @@ def excluir_conta(cid):
     from models import (AlertaEnviado, CodigoVerificacao, EventoEmenda, MonitorDiario, ResumoDiario, TemaMonitorado)
     gids = [x.id for x in Gabinete.query.filter_by(conta_id=c.id).all()] or [0]
     uids = [u.id for u in c.usuarios] or [0]
+    from models_piloto import FonteLegal, RevisaoMinuta, Acompanhamento, ConsentimentoWA, NotificacaoWA
+    cids = [x.id for x in ConsentimentoWA.query.filter(ConsentimentoWA.gabinete_id.in_(gids))]
+    mids = [x.id for x in Minuta.query.filter(Minuta.gabinete_id.in_(gids))]
+    novos_eids = [x.id for x in Emenda.query.filter(Emenda.gabinete_id.in_(gids))]
+    NotificacaoWA.query.filter(NotificacaoWA.consentimento_id.in_(cids)).delete(synchronize_session=False)
+    ConsentimentoWA.query.filter(ConsentimentoWA.gabinete_id.in_(gids)).delete(synchronize_session=False)
+    RevisaoMinuta.query.filter(RevisaoMinuta.minuta_id.in_(mids)).delete(synchronize_session=False)
+    Acompanhamento.query.filter(Acompanhamento.emenda_id.in_(novos_eids)).delete(synchronize_session=False)
+    FonteLegal.query.filter(FonteLegal.gabinete_id.in_(gids)).delete(synchronize_session=False)
     resumo = {"gabinetes": len([x for x in gids if x]), "emendas": Emenda.query.filter(Emenda.gabinete_id.in_(gids)).count()}
     PedidoContratacao.query.filter_by(conta_id=c.id).delete(synchronize_session=False)
     for modelo in (Comunicado, AchadoDiario, Mencao, ResumoDiario, AlertaEnviado, AnaliseProposicao, Minuta):

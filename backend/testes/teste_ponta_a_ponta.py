@@ -65,7 +65,7 @@ ZIP_TSE = {
 }
 
 
-def falso_get(url, params=None, headers=None, timeout=None, stream=False):
+def falso_get(url, params=None, headers=None, timeout=None, stream=False, allow_redirects=True):
     p = dict(params) if isinstance(params, dict) else {}
     if "api-de-dados/emendas" in url:
         if p.get("pagina") != 1 or p.get("ano") != date.today().year:
@@ -113,10 +113,10 @@ def falso_get(url, params=None, headers=None, timeout=None, stream=False):
     if "legis.senado.leg.br/dadosabertos/materia/pesquisa" in url:
         return R({"PesquisaBasicaMateria": {"Materias": {"Materia": {"Codigo": "173057", "DescricaoIdentificacao": "PL 1159/2026",
                   "Ementa": "Altera o Estatuto da Pessoa Idosa.", "Autor": "Senador X", "Data": "2026-03-13"}}}})
-    if "api.transferegov.gestao.gov.br/transferenciasespeciais/plano_acao_especial" in url:
-        return R([{"codigo_plano_acao": "0903-1", "numero_emenda_parlamentar_plano_acao": "202637150001", "situacao_plano_acao": "CIENTE",
+    if "api-publica.transferegov.gestao.gov.br/especiais/planos-acao-especiais" in url:
+        return R({"total_pages":1,"page_number":1,"data":[{"id_plano_acao":1,"codigo_plano_acao": "0903-1", "numero_emenda_parlamentar_plano_acao": "202637150001", "situacao_plano_acao": "CIENTE",
                    "motivo_impedimento_plano_acao": None, "nome_beneficiario_plano_acao": "MUNICIPIO DE JUQUITIBA",
-                   "uf_beneficiario_plano_acao": "SP", "valor_custeio_plano_acao": 0, "valor_investimento_plano_acao": 500000}])
+                   "uf_beneficiario_plano_acao": "SP", "valor_custeio_plano_acao": 0, "valor_investimento_plano_acao": 500000}]})
     if url.startswith("https://news.google.com/rss/search"):
         rss = ("<rss><channel>"
                "<item><title>Deputado Fulano de Tal é alvo de denúncia de desvio e investigação - Jornal Regional</title><link>https://jr.com/1</link>"

@@ -1,0 +1,10 @@
+{
+  "versao": "8.1-piloto",
+  "data": "2026-10-02",
+  "originais": {
+    "kasiski-mandato-v8.zip": "94c3e6b1e6f26c986997a9ed865842d30084c173226dc11f75bf15f865a68a57",
+    "kasiski-mandato-app-netlify-v8.zip": "be5ac7b38a51df228a01fd48740c0a5d14eaacdd52afadf427861917d49c0017"
+  },
+  "openapi_sha256": "211f0d32a7f1c03a6da1d3bd05b7569670f2f29edb89d7938f3476f42b249595",
+  "convenios_zip_sha256": "48b264d4b022231bf06819f58df9c9e01c98703804658b86f4f984aa450bafb6"
+}

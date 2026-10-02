@@ -196,7 +196,7 @@ def _alertar(gab, chave, texto):
         return
     from services import whatsapp
     enviado = False
-    if gab.whatsapp_alertas:
+    if False:  # legado sem opt-in específico: WhatsApp de clipping desativado
         enviado = whatsapp.enviar_alerta(gab.whatsapp_alertas, gab.nome_parlamentar or gab.parlamentar, texto)
     corpo = email.layout("Alerta de crise", f"<p>{html.escape(texto)}</p>", "Abrir o clipping",
                          current_app.config["FRONTEND_URL"] + "/#/clipping")

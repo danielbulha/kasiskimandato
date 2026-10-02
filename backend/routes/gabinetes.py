@@ -104,6 +104,15 @@ def excluir(gid):
     gab = gabinete_da_conta(gid)
     from models import AchadoDiario, Comunicado, Emenda, Minuta, MonitorDiario
     from models import Demanda, TarefaGabinete, CompromissoGabinete, EventoOperacional
+    from models_piloto import FonteLegal, RevisaoMinuta, Acompanhamento, ConsentimentoWA, NotificacaoWA
+    cids = [c.id for c in ConsentimentoWA.query.filter_by(gabinete_id=gid)]
+    mids = [m.id for m in Minuta.query.filter_by(gabinete_id=gid)]
+    eids = [e.id for e in Emenda.query.filter_by(gabinete_id=gid)]
+    NotificacaoWA.query.filter(NotificacaoWA.consentimento_id.in_(cids)).delete(synchronize_session=False)
+    ConsentimentoWA.query.filter_by(gabinete_id=gid).delete()
+    RevisaoMinuta.query.filter(RevisaoMinuta.minuta_id.in_(mids)).delete(synchronize_session=False)
+    Acompanhamento.query.filter(Acompanhamento.emenda_id.in_(eids)).delete(synchronize_session=False)
+    FonteLegal.query.filter_by(gabinete_id=gid).delete()
     for modelo in (EventoOperacional, TarefaGabinete, CompromissoGabinete, Demanda):
         modelo.query.filter_by(gabinete_id=gab.id).delete()
     for modelo in (Comunicado, AchadoDiario, MonitorDiario, Minuta):

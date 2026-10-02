@@ -7,12 +7,13 @@ const ROTAS = [
 ];
 
 const NAV = [
+  ["MVP do mandato", [["#/legislativo", "Novo Projeto/Requerimento", "legislativo"], ["#/emendas", "Minhas Emendas", "emendas"], ["#/comunicacao", "Central de Comunicação", "comunicacao"]]],
   ["Inteligência v8", [["#/inteligencia", "Central de inteligência", "buscar"]]],
   ["Gestão do gabinete", [["#/demandas", "Demandas e protocolos", "gabinete"], ["#/tarefas", "Tarefas e Kanban", "painel"], ["#/agenda", "Agenda", "diarios"]]],
-  ["Verbas e orçamento", [["#/emendas", "Emendas", "emendas"], ["#/diarios", "Diários oficiais", "diarios"],
+  ["Verbas e orçamento", [["#/diarios", "Diários oficiais", "diarios"],
     ["#/repasses-sp", "Repasses do Estado (SP)", "mapa", () => ehSP()]]],
-  ["Produção legislativa", [["#/copiloto", "Copiloto Legislativo", "buscar"], ["#/legislativo", "Minutas legislativas", "legislativo"]]],
-  ["Comunicação e imagem", [["#/clipping", "Clipping e sentimento", "olho"], ["#/comunicacao", "Central de comunicação", "comunicacao"]]],
+  ["Produção legislativa", [["#/copiloto", "Copiloto Legislativo", "buscar"]]],
+  ["Comunicação e imagem", [["#/clipping", "Clipping e sentimento", "olho"]]],
 ];
 
 const ehSP = () => { const g = gabineteAtual(); return !!g && (g.uf === "SP" || (g.base || []).some((m) => m.uf === "SP")); };
@@ -45,7 +46,7 @@ function layout() {
       ${S.gabinetes.length > 1 ? `<div class="seletor-empresa"><label for="sel-gab">Gabinete</label><select id="sel-gab">${opcoes}</select></div>`
         : S.gabinetes.length ? `<div class="seletor-empresa"><label>Gabinete</label><b class="gab-nome">${esc(gabineteAtual()?.nome_parlamentar || gabineteAtual()?.parlamentar)}</b></div>` : ""}
       <nav class="nav-grupo">${link(["#/painel", "Painel", "painel"])}</nav>
-      ${NAV.map(([gr, itens]) => `<nav class="nav-grupo"><span>${gr}</span>${itens.filter((it) => !it[3] || it[3]()).map((it) => link(it, it[0] === "#/diarios" ? S.badgeDiarios : 0)).join("")}</nav>`).join("")}
+      ${NAV.map(([gr, itens], i) => `${i === 1 ? '<details><summary style="padding:12px;color:#b7ceda">Outros recursos</summary>' : ""}<nav class="nav-grupo"><span>${gr}</span>${itens.filter((it) => !it[3] || it[3]()).map((it) => link(it, it[0] === "#/diarios" ? S.badgeDiarios : 0)).join("")}</nav>${i === NAV.length - 1 ? "</details>" : ""}`).join("")}
       <nav class="nav-grupo"><span>Conta</span>
         ${link(["#/gabinete", "Gabinete", "gabinete"])}${link(["#/conta", "Plano e conta", "conta"])}
         ${S.usuario?.admin ? link(["#/admin", "Administração", "admin"]) : ""}

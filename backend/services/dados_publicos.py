@@ -1,14 +1,6 @@
-"""Conectores de dados públicos do Kasiski Mandato.
-
-- Portal da Transparência (CGU) — emendas parlamentares FEDERAIS com empenhado/liquidado/pago.
-  Endpoint /api-de-dados/emendas, chave grátis no cabeçalho "chave-api-dados" (a mesma que o Kasiski já usa).
-- Querido Diário (Open Knowledge Brasil) — busca de texto nos diários oficiais MUNICIPAIS: /gazettes e /cities.
-- IBGE — lista de municípios por UF, para montar a base territorial do gabinete.
-- Transferegov.br, módulo Transferências Especiais (API PostgREST) — situação do plano de ação das "emendas PIX".
-  Campos conferidos em chamada real em 30/09/2026.
-
-Nenhuma destas integrações fez chamada real no ambiente onde foi escrita (sem saída de rede para essas APIs).
-Todas falham com mensagem clara e sem quebrar a tela; o primeiro teste real pode exigir ajuste de nome de campo.
+"""Conectores públicos herdados da v8.
+Transferegov Especiais migrado para a nova API em 02/10/2026; ver docs/FONTES.md.
+CGU, IBGE e Querido Diário mantidos; testes de regressão usam respostas simuladas.
 """
 import logging
 import time
@@ -156,23 +148,12 @@ def municipios(uf):
 
 # --------------------------------------------------------------------------- Transferegov (transferências especiais)
 def planos_acao_especiais(nome_parlamentar, ano):
-    """Planos de ação das "emendas PIX" do parlamentar no Transferegov.br (PostgREST).
-    Campos conferidos em chamada real (30/09/2026): numero_emenda_parlamentar_plano_acao (12 dígitos, mesmo formato do
-    codigoEmenda do Portal da Transparência), situacao_plano_acao, motivo_impedimento_plano_acao, valor_custeio_plano_acao,
-    valor_investimento_plano_acao, nome/cnpj/uf_beneficiario_plano_acao."""
+    """Nova API paginada; contrato verificado em 02/10/2026."""
     if not current_app.config["TRANSFEREGOV_ATIVO"]:
         return []
-    base = current_app.config["TRANSFEREGOV_ESPECIAIS_URL"]
-    try:
-        r = requests.get(f"{base}/plano_acao_especial", headers=UA, timeout=40, params={
-            "ano_emenda_parlamentar_plano_acao": f"eq.{ano}",
-            "nome_parlamentar_emenda_plano_acao": f"ilike.*{nome_parlamentar}*", "limit": 1000})
-        r.raise_for_status()
-        dados = r.json() or []
-    except (requests.RequestException, ValueError) as e:
-        log.warning("Transferegov especiais indisponível: %s", e)
-        return []
-    return [{"codigo_plano": d.get("codigo_plano_acao"), "numero_emenda": str(d.get("numero_emenda_parlamentar_plano_acao") or ""),
-             "beneficiario": d.get("nome_beneficiario_plano_acao") or "", "uf": d.get("uf_beneficiario_plano_acao"),
-             "situacao": d.get("situacao_plano_acao") or "", "impedimento": d.get("motivo_impedimento_plano_acao") or "",
-             "valor": (d.get("valor_custeio_plano_acao") or 0) + (d.get("valor_investimento_plano_acao") or 0)} for d in dados]
+    from services.transferegov_piloto import consultar
+    dados = consultar(nome_parlamentar_emenda_plano_acao=nome_parlamentar, ano_emenda_parlamentar_plano_acao=ano)
+    return [{"codigo_plano": d['id_plano_acao'], "numero_emenda": str(d.get('numero_emenda_parlamentar_plano_acao') or ''),
+             "beneficiario": '', "uf": None, "situacao": d['situacao_plano_acao'],
+             "impedimento": d.get('motivo_impedimento_plano_acao') or '',
+             "valor": (d.get('valor_custeio_plano_acao') or 0) + (d.get('valor_investimento_plano_acao') or 0)} for d in dados]

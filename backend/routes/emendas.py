@@ -101,6 +101,10 @@ def editar(eid):
 def excluir(eid):
     e = emenda_da_conta(eid)
     from models import AchadoDiario, Comunicado
+    from models_piloto import Acompanhamento, NotificacaoWA
+    event_ids = [x.id for x in e.eventos]
+    NotificacaoWA.query.filter(NotificacaoWA.evento_id.in_(event_ids)).delete(synchronize_session=False)
+    Acompanhamento.query.filter_by(emenda_id=e.id).delete()
     AchadoDiario.query.filter_by(emenda_id=e.id).update({"emenda_id": None, "status": "novo"})
     Comunicado.query.filter_by(emenda_id=e.id).update({"emenda_id": None, "evento_id": None})
     db.session.delete(e)

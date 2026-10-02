@@ -6,11 +6,11 @@ V.comunicacao = async (el) => {
   const d = await api("GET", `/api/gabinetes/${S.gabineteId}/comunicados`);
   const per = d.periodo_eleitoral;
   el.innerHTML = `
-    <div class="cabecalho"><div><h1>Central de comunicação</h1><p>Cada entrega do mandato vira notícia — com os números conferidos.</p></div>
+    <div class="cabecalho"><div><h1>Central de comunicação</h1><p>Rascunhos baseados nos registros do gabinete, para conferência antes de divulgar.</p></div>
       <div class="acoes"><button class="botao" id="novo">${icone("adicionar")} Gerar comunicado</button></div></div>
     ${per.vedado ? `<div class="aviso aviso-eleitoral">${icone("aviso")} <span><b>Período eleitoral até ${fmt.data(per.fim)}.</b> Peças para os canais institucionais da Casa ficam bloqueadas
       (Lei 9.504/97, art. 73, VI, b). Nos perfis do parlamentar, sem pedido de voto e sem custeio com verba pública sem conferir o ato da Casa.</span></div>` : ""}
-    ${guia(`<p>Os textos usam só os fatos cadastrados (valores, fase, beneficiário) e passam por um segundo modelo de IA que confere números e tom.
+    ${guia(`<p>Os textos usam os fatos cadastrados (valores, fase, beneficiário). Gerações por IA podem passar por verificação cruzada; alertas de mudança do Transferegov geram rascunhos factuais sem IA. Confira fontes e números em ambos os casos.
       Tudo nasce como <b>rascunho</b>: nada é publicado sem alguém do gabinete aprovar.</p>`)}
     <section class="bloco">${d.comunicados.length ? d.comunicados.map((c) => `<article class="comunicado" data-id="${c.id}">
       <div class="achado-topo">${carimbo(c.formato_nome, "oficio")} ${carimbo(c.canal === "institucional" ? "Canal institucional" : "Perfis do parlamentar", "neutro")}

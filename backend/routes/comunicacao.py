@@ -54,7 +54,11 @@ def editar(cid):
     d = dados()
     if "texto" in d:
         c.texto = d["texto"]
+        c.status = "rascunho"
     if d.get("status") in ("rascunho", "aprovado"):
+        gab = gabinete_da_conta(c.gabinete_id)
+        if d['status'] == 'aprovado' and c.canal == 'institucional' and eleitoral.situacao(gab.esfera)['vedado']:
+            raise ErroAPI('Publicação institucional bloqueada no período configurado; mantenha como rascunho.', 409)
         c.status = d["status"]
     db.session.commit()
     return jsonify(c.dict())

@@ -47,7 +47,7 @@ class Config:
     PORTAL_TRANSPARENCIA_KEY = os.getenv("PORTAL_TRANSPARENCIA_KEY", "")      # a mesma chave grátis do Kasiski
     QUERIDO_DIARIO_URL = os.getenv("QUERIDO_DIARIO_URL", "https://api.queridodiario.ok.org.br").rstrip("/")
     TRANSFEREGOV_ESPECIAIS_URL = os.getenv("TRANSFEREGOV_ESPECIAIS_URL",
-                                           "https://api.transferegov.gestao.gov.br/transferenciasespeciais").rstrip("/")
+                                           "https://api-publica.transferegov.gestao.gov.br/especiais").rstrip("/")
     TRANSFEREGOV_ATIVO = os.getenv("TRANSFEREGOV_ATIVO", "sim").lower() in ("sim", "1", "true")
     MAX_CHARS_REGIMENTO = int(os.getenv("MAX_CHARS_REGIMENTO", "400000"))
 
@@ -99,6 +99,7 @@ class Config:
     SOCIAL_API_URL = os.getenv("SOCIAL_API_URL", "")          # endpoint do fornecedor de social listening
     SOCIAL_API_TOKEN = os.getenv("SOCIAL_API_TOKEN", "")
     CRISE_LIMIAR = int(os.getenv("CRISE_LIMIAR", "5"))        # menções negativas em 6h que disparam alerta
+    WA_ENVIO_ATIVO = os.getenv("WA_ENVIO_ATIVO", "nao").lower() in ("sim", "true", "1")
     WA_TOKEN = os.getenv("WA_TOKEN", "")
     WA_PHONE_ID = os.getenv("WA_PHONE_ID", "")
     WA_TEMPLATE = os.getenv("WA_TEMPLATE", "alerta_mandato")

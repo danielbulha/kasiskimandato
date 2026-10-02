@@ -19,10 +19,21 @@ from services import automacoes, sincronizacao  # noqa: E402
 def rodar():
     app = create_app()
     with app.app_context():
+        from models_piloto import Acompanhamento
+        from services import convenios_piloto
+        numeros = [a.plano_id for a in Acompanhamento.query.filter_by(fonte='convenio')]
+        try:
+            convenios = convenios_piloto.consultar(numeros)
+        except ErroAPI as e:
+            app.logger.warning('Convênios: %s', e.mensagem)
+            convenios = {}
         for gab in Gabinete.query.all():
             conta = db.session.get(Conta, gab.conta_id)
             p = planos.PLANOS[planos.plano_atual(conta)]
-            novidades = {"eventos": 0, "achados": 0, "comunicados": 0}
+            from services import monitor_piloto
+            acompanhamento = monitor_piloto.sincronizar(gab, convenios=convenios)
+            app.logger.info("Acompanhamento gabinete %s: %s", gab.id, acompanhamento)
+            novidades = {"eventos": acompanhamento['mudancas'], "achados": 0, "comunicados": acompanhamento['mudancas']}
             if p["sincronizacao"] and gab.esfera == "federal":
                 try:
                     livres = None if p["emendas"] is None else max(0, p["emendas"] - planos.uso(conta)["emendas"])
@@ -30,6 +41,7 @@ def rodar():
                     novidades["eventos"] = r["eventos"]
                     novidades["comunicados"] = automacoes.rascunhos_para_eventos(gab, r["eventos_ids"])
                 except ErroAPI as e:
+                    db.session.rollback()
                     app.logger.warning("Sincronização federal do gabinete %s: %s", gab.id, e.mensagem)
             if p["sincronizacao"] or planos.plano_atual(conta) == "free":
                 for m in sincronizacao.monitores_ativos(gab):
@@ -40,6 +52,7 @@ def rodar():
                 novidades["riscos"] = sum(1 for e in Emenda.query.filter_by(gabinete_id=gab.id).all() if risco.nivel(risco.avaliar(e)) == "alto")
             automacoes.resumo_diario(gab, novidades)
             app.logger.info("Gabinete %s: %s", gab.id, novidades)
+        monitor_piloto.enviar_pendentes()
 
 
 if __name__ == "__main__":

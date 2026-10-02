@@ -10,7 +10,7 @@ from auth import login_requerido
 from extensions import ErroAPI, db
 from models import TIPOS_MINUTA, Minuta
 from routes import dados, gabinete_da_conta
-from services import ia, kb, legislativo_fontes, prompts
+from services import ia, kb, legislativo_fontes, prompts, rag_piloto
 
 bp = Blueprint("legislativo", __name__, url_prefix="/api")
 
@@ -36,14 +36,22 @@ def gerar(gid):
     gab = gabinete_da_conta(gid)
     d = dados()
     tipo, demanda = d.get("tipo"), (d.get("demanda") or "").strip()
+    if any(k in d for k in ("tema", "objetivo", "publico")):
+        if any(not isinstance(d.get(k), str) or not d[k].strip() for k in ("tema", "objetivo", "publico")):
+            raise ErroAPI("Preencha tema, objetivo principal e público impactado.")
+        demanda = f"Tema: {d['tema'][:500]}\nObjetivo: {d['objetivo'][:2500]}\nPúblico impactado: {d['publico'][:700]}"
     if tipo not in TIPOS_MINUTA:
         raise ErroAPI("Escolha o tipo de proposição.")
     if len(demanda) < 20:
         raise ErroAPI("Descreva a demanda com um pouco mais de detalhe (o problema, quem é atingido, onde).")
     planos.exigir("minutas")
-    base = kb.base_fixa("01", "02", "03")
-    regimento = kb.trechos_regimento(gab.regimento_texto, f"{TIPOS_MINUTA[tipo]} {demanda} iniciativa tramitação prazo")
+    triagem = rag_piloto.avaliar(gab, tipo, demanda)
+    if triagem['estado'] == 'bloqueado':
+        return jsonify({'erro': 'Possível impedimento de competência ou iniciativa. Submeta a demanda à assessoria jurídica; avalie indicação ou requerimento.', 'triagem': triagem}), 422
+    base = json.dumps(triagem['base_constitucional'], ensure_ascii=False)
+    regimento = json.dumps(triagem['fontes'], ensure_ascii=False)
     usuario = prompts.usuario_minuta(tipo, demanda[:4000], gab, base, regimento)
+    usuario += "\nFontes ausentes: " + json.dumps(triagem['fontes_ausentes'])
     parecidas = []
     if planos.tem_modulo(g.conta, "legislativo"):
         palavras = re.findall(r"[A-Za-zÀ-ú]{5,}", demanda)[:3]
@@ -57,7 +65,7 @@ def gerar(gid):
     m = Minuta(gabinete_id=gab.id, tipo=tipo, demanda=demanda, titulo=(res.get("titulo") or TIPOS_MINUTA[tipo])[:400],
                texto=res.get("texto") or "", justificativa=res.get("justificativa") or "",
                analise=json.dumps({**(res.get("analise") or {}), "ementa": res.get("ementa"),
-                                   "regimento_usado": bool(regimento), "leis_parecidas": parecidas}, ensure_ascii=False),
+                                   "regimento_usado": bool(triagem["fontes"]), "leis_parecidas": parecidas, "triagem": triagem}, ensure_ascii=False),
                verificacao=json.dumps(verif, ensure_ascii=False), modelo=resp.modelo)
     db.session.add(m)
     db.session.commit()
@@ -85,7 +93,10 @@ def editar(mid):
 @bp.delete("/minutas/<int:mid>")
 @login_requerido
 def excluir(mid):
-    db.session.delete(_minuta(mid))
+    m = _minuta(mid)
+    from models_piloto import RevisaoMinuta
+    RevisaoMinuta.query.filter_by(minuta_id=mid).delete()
+    db.session.delete(m)
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -99,6 +110,9 @@ def baixar_docx(mid):
     doc = Document()
     estilo = doc.styles["Normal"]
     estilo.font.name, estilo.font.size = "Arial", Pt(12)
+    gab = gabinete_da_conta(m.gabinete_id)
+    revisao = rag_piloto.revisao_atual(m, gab)
+    doc.add_paragraph("MINUTA — REVISÃO HUMANA PENDENTE" if revisao['estado'] != 'aprovado' else "MINUTA — REVISADA PELA EQUIPE")
     doc.add_heading(m.titulo or TIPOS_MINUTA.get(m.tipo, "Proposição"), level=1)
     for linha in (m.texto or "").split("\n"):
         doc.add_paragraph(linha)

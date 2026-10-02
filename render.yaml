@@ -75,6 +75,16 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python jobs/rotina_diaria.py
     envVars:
+      - key: WA_ENVIO_ATIVO
+        value: nao
+      - key: WA_TOKEN
+        sync: false
+      - key: WA_PHONE_ID
+        sync: false
+      - key: WA_TEMPLATE
+        value: alerta_mandato
+      - key: WA_API_VERSAO
+        value: v21.0
       - key: PYTHON_VERSION
         value: 3.12.3
       - key: DATABASE_URL
