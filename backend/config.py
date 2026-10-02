@@ -45,8 +45,7 @@ class Config:
 
     # Dados públicos
     PORTAL_TRANSPARENCIA_KEY = os.getenv("PORTAL_TRANSPARENCIA_KEY", "")      # a mesma chave grátis do Kasiski
-    QUERIDO_DIARIO_URL = os.getenv("QUERIDO_DIARIO_URL", "https://api.queridodiario.ok.org.br",
-    "https://api.queridodiario.org.br").rstrip("/")
+    QUERIDO_DIARIO_URL = os.getenv("QUERIDO_DIARIO_URL", "https://api.queridodiario.org.br").rstrip("/")
     TRANSFEREGOV_ESPECIAIS_URL = os.getenv("TRANSFEREGOV_ESPECIAIS_URL",
                                            "https://api-publica.transferegov.gestao.gov.br/especiais").rstrip("/")
     TRANSFEREGOV_ATIVO = os.getenv("TRANSFEREGOV_ATIVO", "sim").lower() in ("sim", "1", "true")
